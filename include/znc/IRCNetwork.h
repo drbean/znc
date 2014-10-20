@@ -47,7 +47,7 @@ public:
 	enum {
 		JOIN_FREQUENCY = 30,
 		/** How long must an IRC connection be idle before ZNC sends a ping */
-		PING_FREQUENCY = 270,
+		PING_FREQUENCY = 60,
 		/** Time between checks if PINGs need to be sent */
 		PING_SLACK = 30,
 		/** Timeout after which IRC connections are closed. Must
