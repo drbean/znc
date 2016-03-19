@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,29 +17,27 @@
 #include <znc/Modules.h>
 
 class CRawMod : public CModule {
-public:
-	MODCONSTRUCTOR(CRawMod) {}
-	virtual ~CRawMod() {}
+  public:
+    MODCONSTRUCTOR(CRawMod) {}
+    ~CRawMod() override {}
 
-	virtual EModRet OnRaw(CString& sLine) {
-		PutModule("IRC -> [" + sLine + "]");
-		return CONTINUE;
-	}
+    EModRet OnRaw(CString& sLine) override {
+        PutModule("IRC -> [" + sLine + "]");
+        return CONTINUE;
+    }
 
-	virtual void OnModCommand(const CString& sCommand) {
-		PutIRC(sCommand);
-	}
+    void OnModCommand(const CString& sCommand) override { PutIRC(sCommand); }
 
-	virtual EModRet OnUserRaw(CString& sLine) {
-		PutModule("YOU -> [" + sLine + "]");
-		return CONTINUE;
-	}
+    EModRet OnUserRaw(CString& sLine) override {
+        PutModule("YOU -> [" + sLine + "]");
+        return CONTINUE;
+    }
 };
 
-template<> void TModInfo<CRawMod>(CModInfo& Info) {
-	Info.SetWikiPage("raw");
-	Info.AddType(CModInfo::UserModule);
+template <>
+void TModInfo<CRawMod>(CModInfo& Info) {
+    Info.SetWikiPage("raw");
+    Info.AddType(CModInfo::UserModule);
 }
 
 NETWORKMODULEDEFS(CRawMod, "View all of the raw traffic")
-

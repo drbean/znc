@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,159 +20,206 @@
 #include <znc/User.h>
 
 #include <syslog.h>
+#include <time.h>
 
 class CAdminLogMod : public CModule {
-public:
-	MODCONSTRUCTOR(CAdminLogMod) {
-		openlog("znc", LOG_PID, LOG_DAEMON);
-	}
+  public:
+    MODCONSTRUCTOR(CAdminLogMod) {
+        AddHelpCommand();
+        AddCommand("Show", static_cast<CModCommand::ModCmdFunc>(
+                               &CAdminLogMod::OnShowCommand),
+                   "", "Show the logging target");
+        AddCommand("Target", static_cast<CModCommand::ModCmdFunc>(
+                                 &CAdminLogMod::OnTargetCommand),
+                   "<file|syslog|both> [path]", "Set the logging target");
+        openlog("znc", LOG_PID, LOG_DAEMON);
+    }
 
-	virtual ~CAdminLogMod() {
-		Log("Logging ended.");
-		closelog();
-	}
+    ~CAdminLogMod() override {
+        Log("Logging ended.");
+        closelog();
+    }
 
-	virtual bool OnLoad(const CString & sArgs, CString & sMessage) {
-		CString sTarget = GetNV("target");
-		if (sTarget.Equals("syslog"))
-			m_eLogMode = LOG_TO_SYSLOG;
-		else if (sTarget.Equals("both"))
-			m_eLogMode = LOG_TO_BOTH;
-		else if (sTarget.Equals("file"))
-			m_eLogMode = LOG_TO_FILE;
-		else
-			m_eLogMode = LOG_TO_FILE;
+    bool OnLoad(const CString& sArgs, CString& sMessage) override {
+        CString sTarget = GetNV("target");
+        if (sTarget.Equals("syslog"))
+            m_eLogMode = LOG_TO_SYSLOG;
+        else if (sTarget.Equals("both"))
+            m_eLogMode = LOG_TO_BOTH;
+        else if (sTarget.Equals("file"))
+            m_eLogMode = LOG_TO_FILE;
+        else
+            m_eLogMode = LOG_TO_FILE;
 
-		m_sLogFile = GetSavePath() + "/znc.log";
+        SetLogFilePath(GetNV("path"));
 
-		Log("Logging started. ZNC PID[" + CString(getpid()) + "] UID/GID[" + CString(getuid()) + ":" + CString(getgid()) + "]");
-		return true;
-	}
+        Log("Logging started. ZNC PID[" + CString(getpid()) + "] UID/GID[" +
+            CString(getuid()) + ":" + CString(getgid()) + "]");
+        return true;
+    }
 
-	virtual void OnIRCConnected() {
-		Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() + "] connected to IRC: " + GetNetwork()->GetCurrentServer()->GetName());
-	}
+    void OnIRCConnected() override {
+        Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() +
+            "] connected to IRC: " +
+            GetNetwork()->GetCurrentServer()->GetName());
+    }
 
-	virtual void OnIRCDisconnected() {
-		Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() + "] disconnected from IRC");
-	}
+    void OnIRCDisconnected() override {
+        Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() +
+            "] disconnected from IRC");
+    }
 
-	virtual EModRet OnRaw(CString& sLine) {
-		if (sLine.Equals("ERROR ", false, 6)) {
-			//ERROR :Closing Link: nick[24.24.24.24] (Excess Flood)
-			//ERROR :Closing Link: nick[24.24.24.24] Killer (Local kill by Killer (reason))
-			CString sError(sLine.substr(6));
-			if (sError.Left(1) == ":")
-				sError.LeftChomp();
-			Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() + "] disconnected from IRC: " +
-			    GetNetwork()->GetCurrentServer()->GetName() + " [" + sError + "]", LOG_NOTICE);
-		}
-		return CONTINUE;
+    EModRet OnRaw(CString& sLine) override {
+        if (sLine.StartsWith("ERROR ")) {
+            // ERROR :Closing Link: nick[24.24.24.24] (Excess Flood)
+            // ERROR :Closing Link: nick[24.24.24.24] Killer (Local kill by
+            // Killer (reason))
+            CString sError(sLine.substr(6));
+            if (sError.Left(1) == ":") sError.LeftChomp();
+            Log("[" + GetUser()->GetUserName() + "/" + GetNetwork()->GetName() +
+                    "] disconnected from IRC: " +
+                    GetNetwork()->GetCurrentServer()->GetName() + " [" +
+                    sError + "]",
+                LOG_NOTICE);
+        }
+        return CONTINUE;
+    }
+
+    void OnClientLogin() override {
+        Log("[" + GetUser()->GetUserName() + "] connected to ZNC from " +
+            GetClient()->GetRemoteIP());
+    }
+
+    void OnClientDisconnect() override {
+        Log("[" + GetUser()->GetUserName() + "] disconnected from ZNC from " +
+            GetClient()->GetRemoteIP());
+    }
+
+    void OnFailedLogin(const CString& sUsername,
+                       const CString& sRemoteIP) override {
+        Log("[" + sUsername + "] failed to login from " + sRemoteIP,
+            LOG_WARNING);
+    }
+
+    void SetLogFilePath(CString sPath) {
+        if (sPath.empty()) {
+            sPath = GetSavePath() + "/znc.log";
         }
 
-	virtual void OnClientLogin() {
-		Log("[" + GetUser()->GetUserName() + "] connected to ZNC from " + GetClient()->GetRemoteIP());
-	}
+        CFile LogFile(sPath);
+        CString sLogDir = LogFile.GetDir();
+        struct stat ModDirInfo;
+        CFile::GetInfo(GetSavePath(), ModDirInfo);
+        if (!CFile::Exists(sLogDir)) {
+            CDir::MakeDir(sLogDir, ModDirInfo.st_mode);
+        }
 
-	virtual void OnClientDisconnect() {
-		Log("[" + GetUser()->GetUserName() + "] disconnected from ZNC from " + GetClient()->GetRemoteIP());
-	}
+        m_sLogFile = sPath;
+        SetNV("path", sPath);
+    }
 
-	virtual void OnFailedLogin(const CString& sUsername, const CString& sRemoteIP) {
-		Log("[" + sUsername + "] failed to login from " + sRemoteIP, LOG_WARNING);
-	}
+    void Log(CString sLine, int iPrio = LOG_INFO) {
+        if (m_eLogMode & LOG_TO_SYSLOG) syslog(iPrio, "%s", sLine.c_str());
 
-	void Log(CString sLine, int iPrio = LOG_INFO) {
-		if (m_eLogMode & LOG_TO_SYSLOG)
-			syslog(iPrio, "%s", sLine.c_str());
+        if (m_eLogMode & LOG_TO_FILE) {
+            time_t curtime;
+            tm* timeinfo;
+            char buf[23];
 
-		if (m_eLogMode & LOG_TO_FILE) {
-			time_t curtime;
-			tm* timeinfo;
-			char buf[23];
+            time(&curtime);
+            timeinfo = localtime(&curtime);
+            strftime(buf, sizeof(buf), "[%Y-%m-%d %H:%M:%S] ", timeinfo);
 
-			time(&curtime);
-			timeinfo = localtime(&curtime);
-			strftime(buf,sizeof(buf),"[%Y-%m-%d %H:%M:%S] ",timeinfo);
+            CFile LogFile(m_sLogFile);
 
-			CFile LogFile(m_sLogFile);
+            if (LogFile.Open(O_WRONLY | O_APPEND | O_CREAT))
+                LogFile.Write(buf + sLine + "\n");
+            else
+                DEBUG("Failed to write to [" << m_sLogFile
+                                             << "]: " << strerror(errno));
+        }
+    }
 
-			if (LogFile.Open(O_WRONLY | O_APPEND | O_CREAT))
-				LogFile.Write(buf + sLine + "\n");
-			else
-				DEBUG("Failed to write to [" << m_sLogFile  << "]: " << strerror(errno));
-		}
-	}
+    void OnModCommand(const CString& sCommand) override {
+        if (!GetUser()->IsAdmin()) {
+            PutModule("Access denied");
+        } else {
+            HandleCommand(sCommand);
+        }
+    }
 
-	virtual void OnModCommand(const CString& sCommand) {
-		if (!GetUser()->IsAdmin()) {
-			PutModule("Access denied");
-			return;
-		}
+    void OnTargetCommand(const CString& sCommand) {
+        CString sArg = sCommand.Token(1, false);
+        CString sTarget;
+        CString sMessage;
+        LogMode mode;
 
-		CString sCmd = sCommand.Token(0);
+        if (sArg.Equals("file")) {
+            sTarget = "file";
+            sMessage = "Now logging to file";
+            mode = LOG_TO_FILE;
+        } else if (sArg.Equals("syslog")) {
+            sTarget = "syslog";
+            sMessage = "Now only logging to syslog";
+            mode = LOG_TO_SYSLOG;
+        } else if (sArg.Equals("both")) {
+            sTarget = "both";
+            sMessage = "Now logging to syslog and file";
+            mode = LOG_TO_BOTH;
+        } else {
+            if (sArg.empty()) {
+                PutModule("Usage: Target <file|syslog|both> [path]");
+            } else {
+                PutModule("Unknown target");
+            }
+            return;
+        }
 
-		if (sCmd.Equals("target")) {
-			CString sArg = sCommand.Token(1, true);
-			CString sTarget;
-			CString sMessage;
-			LogMode mode;
+        if (mode != LOG_TO_SYSLOG) {
+            CString sPath = sCommand.Token(2, true);
+            SetLogFilePath(sPath);
+            sMessage += " [" + sPath + "]";
+        }
 
-			if (sArg.Equals("file")) {
-				sTarget = "file";
-				sMessage = "Now only logging to file";
-				mode = LOG_TO_FILE;
-			} else if (sArg.Equals("syslog")) {
-				sTarget = "syslog";
-				sMessage = "Now only logging to syslog";
-				mode = LOG_TO_SYSLOG;
-			} else if (sArg.Equals("both")) {
-				sTarget = "both";
-				sMessage = "Now logging to file and syslog";
-				mode = LOG_TO_BOTH;
-			} else {
-				PutModule("Unknown target");
-				return;
-			}
+        Log(sMessage);
+        SetNV("target", sTarget);
+        m_eLogMode = mode;
+        PutModule(sMessage);
+    }
 
-			Log(sMessage);
-			SetNV("target", sTarget);
-			m_eLogMode = mode;
-			PutModule(sMessage);
-		} else if (sCmd.Equals("show")) {
-			CString sTarget;
+    void OnShowCommand(const CString& sCommand) {
+        CString sTarget;
 
-			switch (m_eLogMode)
-			{
-			case LOG_TO_FILE:
-				sTarget = "file";
-				break;
-			case LOG_TO_SYSLOG:
-				sTarget = "syslog";
-				break;
-			case LOG_TO_BOTH:
-				sTarget = "both, file and syslog";
-				break;
-			}
+        switch (m_eLogMode) {
+            case LOG_TO_FILE:
+                sTarget = "file";
+                break;
+            case LOG_TO_SYSLOG:
+                sTarget = "syslog";
+                break;
+            case LOG_TO_BOTH:
+                sTarget = "both, file and syslog";
+                break;
+        }
 
-			PutModule("Logging is enabled for " + sTarget);
-			if (m_eLogMode != LOG_TO_SYSLOG)
-				PutModule("Log file will be written to [" + m_sLogFile + "]");
-		} else
-			PutModule("Commands: show, target <file|syslog|both>");
-	}
-private:
-	enum LogMode {
-		LOG_TO_FILE   = 1 << 0,
-		LOG_TO_SYSLOG = 1 << 1,
-		LOG_TO_BOTH   = LOG_TO_FILE | LOG_TO_SYSLOG
-	};
-	LogMode m_eLogMode;
-	CString m_sLogFile;
+        PutModule("Logging is enabled for " + sTarget);
+        if (m_eLogMode != LOG_TO_SYSLOG)
+            PutModule("Log file will be written to [" + m_sLogFile + "]");
+    }
+
+  private:
+    enum LogMode {
+        LOG_TO_FILE = 1 << 0,
+        LOG_TO_SYSLOG = 1 << 1,
+        LOG_TO_BOTH = LOG_TO_FILE | LOG_TO_SYSLOG
+    };
+    LogMode m_eLogMode = LOG_TO_FILE;
+    CString m_sLogFile;
 };
 
-template<> void TModInfo<CAdminLogMod>(CModInfo& Info) {
-	Info.SetWikiPage("adminlog");
+template <>
+void TModInfo<CAdminLogMod>(CModInfo& Info) {
+    Info.SetWikiPage("adminlog");
 }
 
 GLOBALMODULEDEFS(CAdminLogMod, "Log ZNC events to file and/or syslog.")

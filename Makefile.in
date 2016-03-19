@@ -31,26 +31,39 @@ INSTALL_DATA    := @INSTALL_DATA@
 GIT := @GIT@
 SED := @SED@
 
-GTEST_DOWNLOAD :=
 GTEST_DIR := @GTEST_DIR@
+GMOCK_DIR := @GMOCK_DIR@
 ifeq "$(GTEST_DIR)" ""
-GTEST_VER := 1.7.0
-GTEST_DIR := test/gtest-$(GTEST_VER)
-GTEST_DOWNLOAD := 1
+GTEST_DIR := $(srcdir)/third_party/googletest/googletest
 endif
+ifeq "$(GMOCK_DIR)" ""
+GMOCK_DIR := $(srcdir)/third_party/googletest/googlemock
+endif
+qt_CFLAGS := @qt_CFLAGS@ -fPIC -std=c++11 -pthread
+qt_LIBS   := @qt_LIBS@ -pthread
+
+# Force the simple internal regex engine to get consistent behavior on all platforms.
+# See https://code.google.com/p/chromium/issues/detail?id=317224 for more details.
+GTEST_FLAGS := -DGTEST_HAS_POSIX_RE=0 -I$(GMOCK_DIR)/include -I$(GTEST_DIR)/include
+# Silence warnings about overload virtual Csock::Write(), and missing field
+# initializers in both gtest and gmock
+GTEST_FLAGS += -Wno-overloaded-virtual -Wno-missing-field-initializers
 
 LIB_SRCS  := ZNCString.cpp Csocket.cpp znc.cpp IRCNetwork.cpp User.cpp IRCSock.cpp \
 	Client.cpp Chan.cpp Nick.cpp Server.cpp Modules.cpp MD5.cpp Buffer.cpp Utils.cpp \
 	FileUtils.cpp HTTPSock.cpp Template.cpp ClientCommand.cpp Socket.cpp SHA256.cpp \
-	WebModules.cpp Listener.cpp Config.cpp ZNCDebug.cpp Threads.cpp version.cpp Query.cpp
+	WebModules.cpp Listener.cpp Config.cpp ZNCDebug.cpp Threads.cpp version.cpp Query.cpp \
+	SSLVerifyHost.cpp Message.cpp Translation.cpp
 LIB_SRCS  := $(addprefix src/,$(LIB_SRCS))
 BIN_SRCS  := src/main.cpp
 LIB_OBJS  := $(patsubst %cpp,%o,$(LIB_SRCS))
 BIN_OBJS  := $(patsubst %cpp,%o,$(BIN_SRCS))
-TESTS     := StringTest ConfigTest UtilsTest ThreadTest
+TESTS     := StringTest ConfigTest UtilsTest ThreadTest NickTest ClientTest NetworkTest \
+	MessageTest ModulesTest IRCSockTest QueryTest BufferTest UserTest
 TESTS     := $(addprefix test/,$(addsuffix .o,$(TESTS)))
-CLEAN     := znc src/*.o test/*.o core core.* .version_extra .depend modules/.depend unittest
-DISTCLEAN := Makefile config.log config.status znc-buildmod \
+CLEAN     := znc src/*.o test/*.o core core.* .version_extra .depend modules/.depend \
+	unittest $(LIBZNC)
+DISTCLEAN := Makefile config.log config.status znc-buildmod include/znc/zncconfig.h \
 	modules/Makefile man/Makefile znc.pc znc-uninstalled.pc test/Makefile
 
 CXXFLAGS += -D_MODDIR_=\"$(MODDIR)\" -D_DATADIR_=\"$(DATADIR)\"
@@ -90,17 +103,21 @@ znc: $(BIN_OBJS) $(LIBZNC)
 
 $(LIBZNC): $(LIB_OBJS)
 	$(E) Linking $(LIBZNC)...
-	$(Q)$(CXX) $(LDFLAGS) -shared -o $@ $(LIB_OBJS) $(LIBS)
+	$(Q)$(CXX) $(LDFLAGS) -shared -o $@ $(LIB_OBJS) $(LIBS) -Wl,--out-implib=libznc.dll.a
 endif
 
-unittest: $(LIB_OBJS) test/gtest-all.o test/gtest-main.o $(TESTS)
+unittest: $(LIB_OBJS) test/gtest-all.o test/gmock-all.o test/gmock-main.o $(TESTS)
 	$(E) Linking unit test...
-	$(Q)$(CXX) $(LDFLAGS) -o $@ $(LIB_OBJS) test/gtest-all.o test/gtest-main.o $(TESTS) $(LIBS)
+	$(Q)$(CXX) $(LDFLAGS) -o $@ $(LIB_OBJS) test/gtest-all.o test/gmock-all.o test/gmock-main.o $(TESTS) $(LIBS)
+
+inttest: test/Integration.o test/Int-gtest-all.o test/Int-gmock-all.o test/Int-gmock-main.o
+	$(E) Linking integration test...
+	$(Q)g++ -std=c++11 -o $@ test/Integration.o test/Int-gtest-all.o test/Int-gmock-all.o test/Int-gmock-main.o $(LIBS) $(qt_LIBS)
 
 man:
 	@$(MAKE) -C man $(C)
 
-modules: $(LIBZNC)
+modules: $(LIBZNC) include/znc/Csocket.h
 	@$(MAKE) -C modules $(C)
 
 clean:
@@ -111,43 +128,53 @@ clean:
 distclean: clean
 	rm -rf $(DISTCLEAN)
 
-src/%.o: src/%.cpp Makefile
+src/%.o: src/%.cpp Makefile include/znc/Csocket.h
 	@mkdir -p .depend src
 	$(E) Building core object $*...
 	$(Q)$(CXX) $(CXXFLAGS) -c -o $@ $< -MD -MF .depend/$*.dep -MT $@
 
-test/%.o: test/%.cpp Makefile
+test/%.o: test/%.cpp Makefile include/znc/Csocket.h
 	@mkdir -p .depend test
 	$(E) Building test object $*...
-	$(Q)$(CXX) $(CXXFLAGS) -I$(GTEST_DIR)/include -c -o $@ $< -MD -MF .depend/$*.test.dep -MT $@
+	$(Q)$(CXX) $(CXXFLAGS) $(GTEST_FLAGS) -c -o $@ $< -MD -MF .depend/$*.test.dep -MT $@
 
 test/gtest-all.o: $(GTEST_DIR)/src/gtest-all.cc Makefile
 	@mkdir -p .depend test
 	$(E) Building test object gtest-all...
-	$(Q)$(CXX) $(CXXFLAGS) -I$(GTEST_DIR)/include -I$(GTEST_DIR) -c -o $@ $< -MD -MF .depend/gtest-all.dep -MT $@
+	$(Q)$(CXX) $(CXXFLAGS) $(GTEST_FLAGS) -I$(GTEST_DIR) -c -o $@ $< -MD -MF .depend/gtest-all.dep -MT $@
 
-test/gtest-main.o: $(GTEST_DIR)/src/gtest_main.cc Makefile
+test/gmock-all.o: $(GMOCK_DIR)/src/gmock-all.cc Makefile
 	@mkdir -p .depend test
-	$(E) Building test object gtest-main...
-	$(Q)$(CXX) $(CXXFLAGS) -I$(GTEST_DIR)/include -c -o $@ $< -MD -MF .depend/gtest-main.dep -MT $@
+	$(E) Building test object gmock-all...
+	$(Q)$(CXX) $(CXXFLAGS) $(GTEST_FLAGS) -I$(GMOCK_DIR) -c -o $@ $< -MD -MF .depend/gmock-all.dep -MT $@
 
-ifneq "$(GTEST_DOWNLOAD)" ""
-test/gtest.zip:
+test/gmock-main.o: $(GMOCK_DIR)/src/gmock_main.cc Makefile
 	@mkdir -p .depend test
-	$(E) Downloading GoogleTest $(GTEST_VER)
-	$(Q)wget http://googletest.googlecode.com/files/gtest-$(GTEST_VER).zip -O $@
+	$(E) Building test object gmock-main...
+	$(Q)$(CXX) $(CXXFLAGS) $(GTEST_FLAGS) -c -o $@ $< -MD -MF .depend/gmock-main.dep -MT $@
 
-$(GTEST_DIR)/src/gtest-all.cc $(GTEST_DIR)/src/gtest_main.cc $(GTEST_DIR)/include/gtest/gtest.h: test/gtest.zip
-	$(E) Unpacking GoogleTest $(GTEST_VER)
-	$(Q)test -r $@ || unzip $^ -d test/
-	$(Q)test -r $@
-	$(Q)touch -c $@
-endif
+# Qt fails under TSAN, so CXXFLAGS/LDFLAGS can't be used.
+test/Integration.o: test/integration/main.cpp Makefile
+	@mkdir -p .depend test
+	$(E) Building test object Integration...
+	$(Q)g++ $(qt_CFLAGS) $(GTEST_FLAGS) -c -o $@ $< -MD -MF .depend/Integration.test.dep -MT $@ '-DZNC_BIN_DIR="$(bindir)"' '-DZNC_SRC_DIR="$(realpath $(srcdir))"'
+test/Int-gtest-all.o: $(GTEST_DIR)/src/gtest-all.cc Makefile
+	@mkdir -p .depend test
+	$(E) Building test object Int-gtest-all...
+	$(Q)g++ $(qt_CFLAGS) $(GTEST_FLAGS) -I$(GTEST_DIR) -c -o $@ $< -MD -MF .depend/Int-gtest-all.dep -MT $@
+test/Int-gmock-all.o: $(GMOCK_DIR)/src/gmock-all.cc Makefile
+	@mkdir -p .depend test
+	$(E) Building test object Int-gmock-all...
+	$(Q)g++ $(qt_CFLAGS) $(GTEST_FLAGS) -I$(GMOCK_DIR) -c -o $@ $< -MD -MF .depend/Int-gmock-all.dep -MT $@
+test/Int-gmock-main.o: $(GMOCK_DIR)/src/gmock_main.cc Makefile
+	@mkdir -p .depend test
+	$(E) Building test object Int-gmock-main...
+	$(Q)g++ $(qt_CFLAGS) $(GTEST_FLAGS) -c -o $@ $< -MD -MF .depend/Int-gmock-main.dep -MT $@
 
 ifneq "THIS_IS_NOT_TARBALL" ""
 # If git commit was changed since previous build, add a phony target to dependencies, forcing version.o to be recompiled
 # Nightlies have pregenerated version.cpp
-src/version.cpp: Makefile version.sh $(shell if [ x`cat .version_extra 2> /dev/null` != x`$(srcdir)/version.sh $(GIT) 2> /dev/null` ]; then echo version_extra_recompile; fi)
+src/version.cpp: Makefile version.sh $(shell if [ x`cat .version_extra 2> /dev/null` != x`$(srcdir)/version.sh "$(GIT)" 3>&2 2> /dev/null` ]; then echo version_extra_recompile; fi)
 	@mkdir -p .depend src
 	$(E) Building source file version.cpp...
 	$(Q)WRITE_OUTPUT=yes $(srcdir)/version.sh "$(GIT)" > .version_extra 2> /dev/null
@@ -155,7 +182,26 @@ src/version.cpp: Makefile version.sh $(shell if [ x`cat .version_extra 2> /dev/n
 CLEAN += src/version.cpp
 endif
 
-install: znc $(LIBZNC)
+CLEAN += src/Csocket.cpp include/znc/Csocket.h
+
+src/Csocket.cpp: third_party/Csocket/Csocket.cc
+	@rm -f $@
+	@mkdir -p src
+	@sed -e 's:#include "Csocket.h":#include <znc/Csocket.h>:' $^ > $@
+include/znc/Csocket.h: third_party/Csocket/Csocket.h
+	@rm -f $@
+	@mkdir -p include/znc
+	@sed -e 's:#include "defines.h":#include <znc/defines.h>:' $^ > $@
+third_party/Csocket/Csocket.h third_party/Csocket/Csocket.cc:
+	@echo It looks like git submodules are not initialized. Run: git submodule update --init --recursive
+	@exit 1
+
+znc.service: znc.service.in
+	@sed -e "s:\@CMAKE_INSTALL_FULL_BINDIR\@:$(bindir):" $^ > $@
+
+CLEAN += znc.service
+
+install: znc znc.service $(LIBZNC)
 	test -d $(DESTDIR)$(bindir) || $(INSTALL) -d $(DESTDIR)$(bindir)
 	test -d $(DESTDIR)$(includedir)/znc || $(INSTALL) -d $(DESTDIR)$(includedir)/znc
 	test -d $(DESTDIR)$(PKGCONFIGDIR) || $(INSTALL) -d $(DESTDIR)$(PKGCONFIGDIR)
@@ -167,12 +213,13 @@ install: znc $(LIBZNC)
 	$(INSTALL_PROGRAM) znc $(DESTDIR)$(bindir)
 	$(INSTALL_SCRIPT) znc-buildmod $(DESTDIR)$(bindir)
 	$(INSTALL_DATA) $(srcdir)/include/znc/*.h $(DESTDIR)$(includedir)/znc
-	$(INSTALL_DATA) include/znc/zncconfig.h $(DESTDIR)$(includedir)/znc
+	$(INSTALL_DATA) include/znc/*.h $(DESTDIR)$(includedir)/znc
 	$(INSTALL_DATA) znc.pc $(DESTDIR)$(PKGCONFIGDIR)
 	@$(MAKE) -C modules install DESTDIR=$(DESTDIR);
 	if test -n "$(LIBZNC)"; then \
 		test -d $(DESTDIR)$(LIBZNCDIR) || $(INSTALL) -d $(DESTDIR)$(LIBZNCDIR) || exit 1 ; \
 		$(INSTALL_PROGRAM) $(LIBZNC) $(DESTDIR)$(LIBZNCDIR) || exit 1 ; \
+		$(INSTALL_PROGRAM) libznc.dll.a $(DESTDIR)$(libdir) || exit 1 ; \
 	fi
 	@$(MAKE) -C man install DESTDIR=$(DESTDIR)
 	@HAVE_SYSTEMD_TRUE@test -d $(DESTDIR)$(systemdsystemunitdir) || $(INSTALL) -d $(DESTDIR)$(systemdsystemunitdir)
@@ -207,5 +254,10 @@ uninstall:
 
 test: unittest
 	$(Q)./unittest
+
+# This test uses files at <prefix>/lib/znc, which is less than ideal, especially from build scripts of distros.
+# That's why it's a separate make target.
+test2: inttest
+	$(Q)./inttest
 
 -include $(wildcard .depend/*.dep)

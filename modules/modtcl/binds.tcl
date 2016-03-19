@@ -1,4 +1,4 @@
-# Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+# Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ namespace eval Binds {
 			}
 		}
 		if {!$match} {
-			PutModule "Error, dcc trigger '[string range [lindex $text 0] 1 end]' doesnt exist"
+			PutModule "Error, dcc trigger '[string range [lindex $text 0] 1 end]' doesn't exist"
 		}
 	}
 }

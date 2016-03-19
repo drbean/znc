@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,31 +17,56 @@
 #include <znc/Modules.h>
 
 class CBlockMotd : public CModule {
-public:
-	MODCONSTRUCTOR(CBlockMotd) {
-	}
+  public:
+    MODCONSTRUCTOR(CBlockMotd) {
+        AddHelpCommand();
+        AddCommand("GetMotd", static_cast<CModCommand::ModCmdFunc>(
+                                  &CBlockMotd::OverrideCommand),
+                   "[<server>]",
+                   "Override the block with this command. Can optionally "
+                   "specify which server to query.");
+    }
 
-	virtual ~CBlockMotd() {
-	}
+    ~CBlockMotd() override {}
 
-	virtual EModRet OnRaw(CString &sLine) {
-		const CString sCmd = sLine.Token(1);
+    void OverrideCommand(const CString& sLine) {
+        m_bTemporaryAcceptMotd = true;
+        const CString sServer = sLine.Token(1);
 
-		if (sCmd == "375" /* begin of MOTD */
-				|| sCmd == "372" /* MOTD */)
-			return HALT;
-		if (sCmd == "376" /* End of MOTD */) {
-			sLine = sLine.Token(0) + " 422 " +
-				sLine.Token(2) + " :MOTD blocked by ZNC";
-		}
-		return CONTINUE;
-	}
+        if (sServer.empty()) {
+            PutIRC("motd");
+        } else {
+            PutIRC("motd " + sServer);
+        }
+    }
+
+    EModRet OnRaw(CString& sLine) override {
+        const CString sCmd = sLine.Token(1);
+
+        if ((sCmd == "375" /* begin of MOTD */ || sCmd == "372" /* MOTD */) &&
+            !m_bTemporaryAcceptMotd)
+            return HALT;
+
+        if (sCmd == "376" /* End of MOTD */) {
+            if (!m_bTemporaryAcceptMotd) {
+                sLine = sLine.Token(0) + " 422 " + sLine.Token(2) +
+                        " :MOTD blocked by ZNC";
+            }
+            m_bTemporaryAcceptMotd = false;
+        }
+        return CONTINUE;
+    }
+
+  private:
+    bool m_bTemporaryAcceptMotd = false;
 };
 
-template<> void TModInfo<CBlockMotd>(CModInfo& Info) {
-	Info.AddType(CModInfo::NetworkModule);
-	Info.AddType(CModInfo::GlobalModule);
-	Info.SetWikiPage("block_motd");
+template <>
+void TModInfo<CBlockMotd>(CModInfo& Info) {
+    Info.AddType(CModInfo::NetworkModule);
+    Info.AddType(CModInfo::GlobalModule);
+    Info.SetWikiPage("block_motd");
 }
 
-USERMODULEDEFS(CBlockMotd, "Block the MOTD from IRC so it's not sent to your client(s).")
+USERMODULEDEFS(CBlockMotd,
+               "Block the MOTD from IRC so it's not sent to your client(s).")

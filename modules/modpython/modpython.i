@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,32 @@
  * limitations under the License.
  */
 
-%module znc_core %{
+%module znc_core
+
+%{
 #include <utility>
-#include "../include/znc/Utils.h"
-#include "../include/znc/Threads.h"
-#include "../include/znc/Config.h"
-#include "../include/znc/Socket.h"
-#include "../include/znc/Modules.h"
-#include "../include/znc/Nick.h"
-#include "../include/znc/Chan.h"
-#include "../include/znc/User.h"
-#include "../include/znc/IRCNetwork.h"
-#include "../include/znc/Client.h"
-#include "../include/znc/IRCSock.h"
-#include "../include/znc/Listener.h"
-#include "../include/znc/HTTPSock.h"
-#include "../include/znc/Template.h"
-#include "../include/znc/WebModules.h"
-#include "../include/znc/znc.h"
-#include "../include/znc/Server.h"
-#include "../include/znc/ZNCString.h"
-#include "../include/znc/FileUtils.h"
-#include "../include/znc/ZNCDebug.h"
-#include "../include/znc/ExecSock.h"
-#include "../include/znc/Buffer.h"
+#include "znc/Utils.h"
+#include "znc/Threads.h"
+#include "znc/Config.h"
+#include "znc/Socket.h"
+#include "znc/Modules.h"
+#include "znc/Nick.h"
+#include "znc/Chan.h"
+#include "znc/User.h"
+#include "znc/IRCNetwork.h"
+#include "znc/Client.h"
+#include "znc/IRCSock.h"
+#include "znc/Listener.h"
+#include "znc/HTTPSock.h"
+#include "znc/Template.h"
+#include "znc/WebModules.h"
+#include "znc/znc.h"
+#include "znc/Server.h"
+#include "znc/ZNCString.h"
+#include "znc/FileUtils.h"
+#include "znc/ZNCDebug.h"
+#include "znc/ExecSock.h"
+#include "znc/Buffer.h"
 #include "modpython/module.h"
 
 #include "modpython/ret.h"
@@ -47,6 +49,17 @@ using std::allocator;
 %}
 
 %apply long { off_t };
+%apply long { uint16_t };
+%apply long { uint32_t };
+%apply long { uint64_t };
+
+// Just makes generated python code slightly more beautiful.
+%feature("python:defaultargs");
+// Probably can be removed when swig is fixed to not produce bad code for some cases
+%feature("python:defaultargs", "0") CDir::MakeDir; // 0700 doesn't work in python3
+%feature("python:defaultargs", "0") CUtils::GetNumInput; // SyntaxError: non-default argument follows default argument
+%feature("python:defaultargs", "0") CModules::GetAvailableMods; // NameError: name 'UserModule' is not defined
+%feature("python:defaultargs", "0") CModules::GetDefaultMods; // NameError: name 'UserModule' is not defined
 
 %begin %{
 #include "znc/zncconfig.h"
@@ -58,6 +71,11 @@ using std::allocator;
 %include <std_list.i>
 %include <std_set.i>
 %include <std_deque.i>
+%include <std_shared_ptr.i>
+
+%shared_ptr(CAuthBase);
+%shared_ptr(CWebSession);
+%shared_ptr(CClientAuth);
 
 %include "modpython/cstring.i"
 %template(_stringlist) std::list<CString>;
@@ -86,6 +104,10 @@ class MCString : public std::map<CString, CString> {};
 %template(VListeners) std::vector<CListener*>;
 %template(BufLines) std::deque<CBufLine>;
 %template(VVString) std::vector<VCString>;
+%template(VClients) std::vector<CClient*>;
+
+#define REGISTER_ZNC_MESSAGE(M) \
+    %template(As_ ## M) CMessage::As<M>;
 
 %typemap(in) CString& {
 	String* p;
@@ -124,34 +146,34 @@ class MCString : public std::map<CString, CString> {};
 
 #define u_short unsigned short
 #define u_int unsigned int
-#include "../include/znc/zncconfig.h"
-#include "../include/znc/ZNCString.h"
-%include "../include/znc/defines.h"
-%include "../include/znc/Utils.h"
-%include "../include/znc/Threads.h"
-%template(PAuthBase) CSmartPtr<CAuthBase>;
-%template(WebSession) CSmartPtr<CWebSession>;
-%include "../include/znc/Config.h"
-%include "../include/znc/Csocket.h"
+#include "znc/zncconfig.h"
+#include "znc/ZNCString.h"
+%include "znc/defines.h"
+%include "znc/Translation.h"
+%include "znc/Utils.h"
+%include "znc/Threads.h"
+%include "znc/Config.h"
+%include "znc/Csocket.h"
 %template(ZNCSocketManager) TSocketManager<CZNCSock>;
-%include "../include/znc/Socket.h"
-%include "../include/znc/FileUtils.h"
-%include "../include/znc/Modules.h"
-%include "../include/znc/Nick.h"
-%include "../include/znc/Chan.h"
-%include "../include/znc/User.h"
-%include "../include/znc/IRCNetwork.h"
-%include "../include/znc/Client.h"
-%include "../include/znc/IRCSock.h"
-%include "../include/znc/Listener.h"
-%include "../include/znc/HTTPSock.h"
-%include "../include/znc/Template.h"
-%include "../include/znc/WebModules.h"
-%include "../include/znc/znc.h"
-%include "../include/znc/Server.h"
-%include "../include/znc/ZNCDebug.h"
-%include "../include/znc/ExecSock.h"
-%include "../include/znc/Buffer.h"
+%include "znc/Socket.h"
+%include "znc/FileUtils.h"
+%include "znc/Message.h"
+%include "znc/Modules.h"
+%include "znc/Nick.h"
+%include "znc/Chan.h"
+%include "znc/User.h"
+%include "znc/IRCNetwork.h"
+%include "znc/Client.h"
+%include "znc/IRCSock.h"
+%include "znc/Listener.h"
+%include "znc/HTTPSock.h"
+%include "znc/Template.h"
+%include "znc/WebModules.h"
+%include "znc/znc.h"
+%include "znc/Server.h"
+%include "znc/ZNCDebug.h"
+%include "znc/ExecSock.h"
+%include "znc/Buffer.h"
 
 %include "modpython/module.h"
 
@@ -190,12 +212,12 @@ class CPyRetBool {
     PyObject* WriteBytes(PyObject* data) {
         if (!PyBytes_Check(data)) {
             PyErr_SetString(PyExc_TypeError, "socket.WriteBytes needs bytes as argument");
-            return NULL;
+            return nullptr;
         }
         char* buffer;
         Py_ssize_t length;
         if (-1 == PyBytes_AsStringAndSize(data, &buffer, &length)) {
-            return NULL;
+            return nullptr;
         }
         if ($self->Write(buffer, length)) {
             Py_RETURN_TRUE;
@@ -274,6 +296,28 @@ class CPyRetBool {
 	}
 };
 
+%extend CMessage {
+    CString __str__() {
+        return $self->ToString();
+    }
+    CString __repr__() {
+        return $self->ToString();
+    }
+};
+
+%extend CZNC {
+    PyObject* GetUserMap_() {
+        PyObject* result = PyDict_New();
+        auto user_type = SWIG_TypeQuery("CUser*");
+        for (const auto& p : $self->GetUserMap()) {
+            PyObject* user = SWIG_NewInstanceObj(p.second, user_type, 0);
+            PyDict_SetItemString(result, p.first.c_str(), user);
+            Py_CLEAR(user);
+        }
+        return result;
+    }
+};
+
 /* To allow module-loaders to be written on python.
  * They can call CreatePyModule() to create CModule* object, but one of arguments to CreatePyModule() is "CModule* pModPython"
  * Pointer to modpython is already accessible to python modules as self.GetModPython(), but it's just a pointer to something, not to CModule*.
@@ -308,7 +352,7 @@ typedef std::vector<std::pair<CString, CString> > VPair;
 
 %inline %{
 	TWebSubPage CreateWebSubPage_(const CString& sName, const CString& sTitle, const VPair& vParams, unsigned int uFlags) {
-		return new CWebSubPage(sName, sTitle, vParams, uFlags);
+		return std::make_shared<CWebSubPage>(sName, sTitle, vParams, uFlags);
 	}
 %}
 

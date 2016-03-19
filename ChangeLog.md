@@ -1,3 +1,292 @@
+# (unreleased)
+
+## Changes (need to verify this)
+
+* workarounds during config parsing for old ZNC versions removed
+    * incompatible configs give an error during startup indicating the problem
+    * versions including 0.206 and newer are still supported
+* rehash only reloads global settings, including global modules and listeners
+    * users are not reloaded any more - which makes rehash less dangerous
+* OnAddUser hook is only called if actually a new user added
+    * it is not called during ZNC startup any more
+* Fix build on Solaris 10
+* Fix build with LibreSSL
+
+
+
+# ZNC 1.6.3 (2016-02-23)
+
+## Core
+* New character encoding is now applied immediately, without reconnect.
+* Fixed build with LibreSSL.
+* Fixed error 404 when accessing the web UI with the configured URI prefix,
+  but without the `/` in the end.
+* `znc-buildmod` now exits with non-zero exit code when the .cpp file is not found.
+* Fixed `znc-buildmod` on Cygwin.
+* ExpandString got expanded. It now expands `%znc%` to
+  `ZNC <version> - http://znc.in`, honoring the global "Hide version" setting.
+* Default quit message is switched from `ZNC <version> - http://znc.in` to `%znc%`,
+  which is the same, but "automatically" changes the shown version when ZNC gets upgraded.
+  Before, the old version was recorded in the user's quit message, and stayed the same
+  regardless of the current version of ZNC.
+
+## Modules
+* modperl:
+    * Fixed a memory leak.
+* sasl:
+    * Added an option to show which mechanisms failed or succeeded.
+* webadmin:
+    * Fixed an error message on invalid user settings to say what exactly was invalid.
+    * No more autocomplete password in user settings. It led to an error when ZNC
+      thought the user is going to change a password, but the passwords didn't match.
+
+
+
+# ZNC 1.6.2 (2015-11-15)
+
+## Fixes
+
+* Fixed a use-after-delete in webadmin. It was already partially fixed in ZNC 1.4; since 1.4 it has been still possible to trigger, but much harder.
+* Fixed a startup failure when awaynick and simple_away were both loaded, and simple_away had arguments.
+* Fixed a build failure when using an ancient OpenSSL version.
+* Fixed a build failure when using OpenSSL which was built without SSLv3 support.
+* Bindhost was sometimes used as ident.
+* `CAP :END` wasn't parsed correctly, causing timeout during login for some clients.
+* Fixed channel keys if client joined several channels in single command.
+* Fixed memory leak when reading an invalid config.
+
+## Modules
+
+* autovoice:
+    * Check for autovoices when we are opped.
+* controlpanel:
+    * Fixed `DelCTCPReply` case-insensitivity.
+* dcc:
+    * Add missing return statement. It was harmless.
+* modpython:
+    * Fixed a memory leak.
+* modules_online:
+    * Wrong ident was used before.
+* stickychan:
+    * Fixed to unstick inaccessible channels to avoid infinite join loops.
+
+## Internal
+
+* Fixed the nick passed to `CModule::OnChanMsg()` so it has channel permissions set.
+* Fixed noisy `-Winconsistent-missing-override` compilation warnings.
+* Initialized some fields in constructors of modules before `OnLoad()`.
+
+## Cosmetic
+
+* Various modules had commands with empty descriptions.
+* perform:
+    * Say "number" instead of "nr".
+* route_replies:
+    * Make the timeout error message more clear.
+
+
+
+# ZNC 1.6.1 (2015-08-04)
+
+## Fixes
+
+* Fixed the problem that channels were no longer removed from the config despite of chansaver being loaded.
+* Fixed query buffer size for users who have the default channel buffer size set to 0.
+* Fixed a startup failure when simple_away was loaded after awaynick.
+* Fixed channel matching commands, such as DETACH, to be case insensitive.
+* Specified the required compiler versions in the configure script.
+* Fixed a rare conflict of HTTP-Basic auth and cookies.
+* Hid local IP address from the 404 page.
+* Fixed a build failure for users who have `-Werror=missing-declarations` in their `CXXFLAGS`.
+* Fixed `CXXFLAGS=-DVERSION_EXTRA="foo"` which is used by some distros to package ZNC.
+* Fixed `znc-buildmod` on Cygwin.
+
+## Modules
+
+* chansaver:
+    * Fixed random loading behavior due to an uninitialized member variable.
+* modpython:
+    * Fixed access to `CUser::GetUserClients()` and `CUser::GetAllClients()`.
+* sasl:
+    * Improved help texts for the SET and REQUIREAUTH commands.
+* savebuff:
+    * Fixed periodical writes on the disk when the module is loaded after startup.
+* webadmin:
+    * Fixed module checkboxes not to claim that all networks/users have loaded a module when there are no networks/users.
+    * Added an explanation that ZNC was built without ICU support, when encoding settings are disabled for that reason.
+    * Improved the breadcrumbs.
+    * Mentioned ExpandString in CTCP replies.
+    * Added an explanation how to delete port which is used to access webadmin.
+
+## Internal
+
+* Fixed `CThreadPool` destructor to handle spurious wakeups.
+* Fixed `make distclean` to remove `zncconfig.h`.
+* Improved the error message about `--datadir`.
+* Fixed a compilation warning when `HAVE_LIBSSL` is not defined.
+* Fixed 'comparision' typos in CString documentation.
+* Added a non-minified version of the jQuery source code to make Linux distributions (Debian) happy, even though the jQuery license does not require this.
+
+
+
+# ZNC 1.6.0 (2015-02-12)
+
+## New
+
+* Switch versioning scheme to <major>.<minor>.<patch>.
+* Add settings for which SSL/TLS protocols to use (SSLProtocols), which ciphers to enable (SSLCiphers). By default TLSv1+ are enabled, SSLv2/3 are disabled. Default ciphers are what Mozilla advices: https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28default.29
+* Validate SSL certificates.
+* Allow clients to specify an ID as part of username (user[@identifier][/network]). Currently not used, but modules can use it.
+* Add alias module for ZNC-side command interception and processing.
+* Support character encodings with separate settings for networks, and for clients. It replaces older charset module, which didn't work well with webadmin, log and other modules.
+* Support X-Forwarded-For HTTP header, used with new TrustedProxy setting.
+* Add URIPrefix option for HTTP listeners, used with reverse proxy.
+* Store query buffers per query the same way it's done for channels, add new option AutoClearQueryBuffer.
+* Add DisableChan command to *status, it was available only in webadmin before.
+* Allow wildcards in arguments of Help commands of *status and various modules.
+* Support IRCv3.2 batches, used for buffer playbacks.
+* Support IRCv3.2 self-message.
+* Remove awaynick module. It's considered bad etiquette.
+* Add JoinDelay setting, which allows a delay between connection to server, and joining first channel. By default it joins immediately after connect.
+* Make Detach, EnableChan and DisableChan commands of *status accept multiple channels.
+* znc-buildmod: Build output to the current working directory.
+* Wrap long lines in tables (e.g. in Help or ListAvailMods commands).
+* Support ECDHE if available in OpenSSL.
+* Report ZNC version more consistently, add HideVersion setting, which hides ZNC version from public.
+* Bump compiler requirements to support C++11. This means GCC 4.7+, Clang 3.2+, SWIG 3.0.0+.
+
+
+## Fixes
+
+* Disable TLS compression.
+* Disallow setting ConnectDelay to zero, don't hammer server with our failed connects.
+* Simplify --makeconf.
+* Fix logic to find an available nick when connecting to server.
+* Fix handling of CTCP flood.
+* Allow network specific quit messages.
+* Make various text labels gender-neutral.
+* Fix finding SWIG 3 on FreeBSD.
+* Handle multi-receiver NOTICE and PRIVMSG.
+* Make channels follow user-level settings when appropriate.
+* Write disabled status to config for disabled channels.
+* Fix double output in messages from modules.
+* Fix memory leak in gzip compression in HTTP server.
+* Use random DNS result instead of choosing the same one every time.
+* Fix HTTP basic auth.
+* Mention network in message shown if client didn't send PASS.
+
+
+## Modules
+
+* autoattach:
+    * Make it also a network module.
+* autoreply:
+    * Use NOTICE instead of PRIVMSG.
+* autoop:
+    * Add support for multiple hostmasks per user.
+* awaystore:
+    * Store CTCP ACTIONs too.
+    * Reset timer and return from away when a client does a CTCP ACTION.
+    * Allows use of strftime formatting in away messages.
+* bouncedcc:
+    * Fix quotes in file names.
+    * Fix check for "Connected" state.
+* buffextras:
+    * Make it also a network module.
+* chansaver:
+    * Fix saving channel keys.
+    * Add support for loading as a global module.
+* controlpanel:
+    * Add AddChan, DelChan commands, useful for admins to edit other users' channels, was available only in webadmin before.
+    * Check if adding a new channel succeeded.
+    * Revise Help output.
+    * Allow wildcards for GetChan and SetChan.
+* flooddetach:
+    * Show current value in Lines and Secs commands.
+    * Add Silent [yes|no] command, similar to route_replies.
+* listsockets:
+    * Show traffic stats.
+* log:
+    * Use only lower case characters in log filenames.
+    * Use directories and YYYY-MM-DD filename by default.
+    * Add support for logging rules. E.g. /msg *log setrules #znc !#*
+* modperl:
+    * Fix some int_t types.
+* modpython:
+    * Fix calling overloaded methods with parameter CString&.
+    * Support CZNC::GetUserMap().
+    * Set has_args and args_help_text from module.
+    * Release python/swig ownership when adding object created in python to ZNC container.
+    * Fix some int_t types.
+    * Enable default arguments feature of SWIG 3.0.4. No functionality change, it just makes generated code a bit more beautiful.
+* nickserv:
+    * Support tddirc.net.
+    * Remove commands Ghost, Recover, Release, Group. The same functionality is available via new alias module.
+* q:
+    * Add JoinOnInvite, JoinAfterCloaked options.
+    * Don't cloak host on first module load if already connected to IRC.
+    * Add web configuration.
+    * Use HMAC-SHA-256 instead of HMAC-MD5.
+* route_replies:
+    * Handle numerics 307 and 379 in /whois reply. Handle IRCv3.2 METADATA numerics.
+* sample:
+    * Make it a network module, which are easier to write.
+* sasl:
+    * Remove DH-BLOWFISH and DH-AES. See http://nullroute.eu.org/~grawity/irc-sasl-dh.html and http://kaniini.dereferenced.org/2014/12/26/do-not-use-DH-AES-or-DH-BLOWFISH.html for details.
+* savebuff:
+    * Do not skip channels with AutoClearChanBuffer=true.
+    * Handle empty password in SetPass the same way as during startup.
+* simple_away:
+    * Apply auto-away on load if no user is connected.
+* stickychan:
+    * Don't join channels when not connected.
+* watch:
+    * Add support for detached-only clients, and detached-only channels.
+* webadmin:
+    * Combine "List Users" and "Add User".
+    * Module argument autocomplete="off", for nickserv module, which contains password in argument before first save.
+    * For every module show in which other levels that module is loaded (global/user/network).
+    * Open links to wiki pages about modules in separate window/tab.
+    * Support renaming a network (it was already possible outside of webadmin, via /znc MoveNetwork). However, it doesn't support moving networks between users yet, for that use /znc command.
+    * Add missing page title on Traffic page.
+    * Improve navigation: "Save and continue".
+    * Clarify that timestamp format is useless with server-time.
+
+
+## Internal
+
+* Move Csocket to git submodule.
+* Unit tests, via GTest.
+* Allow lambdas for module command callbacks.
+* New modules hooks: OnSendToClient, OnSendToIRC, OnJoining, OnMode2, OnChanBufferPlayLine2, OnPrivBufferPlayLine2.
+* Add methods to CString: StartsWith, EndsWith, Join, Find, Contains, and Convert.
+* Add limited support for using threads in modules: CModuleJob class.
+* Inherit CClient and CIRCSock from a common class CIRCSocket.
+* Add CZNC::CreateInstance to make porting ZNC to MSVC a bit easier.
+* Add CUtils::Get/SetMessageTags().
+* Add CIRCNetwork::FindChans().
+* Add CChan::SendBuffer(client, buffer) overload.
+* Add CIRCNetwork::LoadModule() helper.
+* Add CClient::IsPlaybackActive().
+* Web: Discard sessions in LRU order.
+* Introduce CaseSensitivity enum class.
+* Fix CNick::Parse().
+* Remove redundant CWebSocket::GetModule().
+* Switch from CSmartPtr to std::shared_ptr.
+* Fix GetClients() const correctness.
+* Make self-signed cert with SHA-256, provide DH parameters in --makepem.
+* Use override keyword.
+* Show username of every http request in -D output.
+* Split CUserTimer into CIRCNetworkPingTimer and CIRCNetworkJoinTimer.
+* Give a reason for disabled features during ./configure, where it makes sense.
+* Use make-tarball.sh for nightlies too.
+* Revise CChan::JoinUser() & AttachUser().
+* Modules: use public API.
+* Modules: use AddCommand().
+* Add ChangeLog.md.
+
+
+
 # ZNC 1.4 (2014-05-08)
 
 This release is done to fix a denial of service attack through webadmin. After authentication, users can crash ZNC through a use-after-delete.
@@ -17,9 +306,9 @@ In detail, these are:
 
 ## Fixes
 
-* Fix a use-after-delete in webadmin.
+* Fix a use-after-delete in webadmin. CVE-2014-9403
 * Honor the BindHost whitelist when configuring BindHosts in controlpanel module.
-* Ignore trailing whitespace in <code>/znc jump</code> arguments.
+* Ignore trailing whitespace in /znc jump arguments.
 * Change formatting of startup messages so that we never overwrite part of a message when printing the result of an action.
 * Fix configure on non-bash shells.
 * Send the correct error for invalid CAP subcommands.
@@ -43,7 +332,7 @@ In detail, these are:
 
 ### modperl and modpython
 
-* Make <code>OnAddNetwork</code> and <code>OnDeleteNetwork</code> module hooks work.
+* Make OnAddNetwork and OnDeleteNetwork module hooks work.
 * Don't create .pyc files during compilation.
 * Fix modperl on MacOS X. Twice.
 * Require at least SWIG 2.0.12 on MacOS X.
@@ -147,7 +436,7 @@ In detail, these are:
 
 ### awaystore
 
-* Fix loading old configs which refered to "away" module
+* Fix loading old configs which referred to "away" module
 * Fix displaying IPv6 addresses
 
 ### crypt
@@ -638,7 +927,7 @@ To fix this, remove any user:pass@host portions from your bookmarks, remove all 
 * Moved some modules into/out of extra. (r1919) (r1922) (r1923)
 * Added ./configure --enable-run-from-script, without it ZNC will no longer look for modules in ./modules/. (r1927) (r1928) (r2001)
 * Made a dedicated page to confirm user deletion in webadmin. (r1937) (r1939) (r1941) (r1943)
-* Use spaces for seperating ip addresses from ports. (r1955)
+* Use spaces for separating ip addresses from ports. (r1955)
 * ZNC's built-in MOTD now goes through ExpandString. (r1956)
 * Check for root before generating a new config file. (r1988)
 * Added a flag for adding irc-only / http-only ports via /znc addport. (r1990) (r1992)
@@ -1139,7 +1428,7 @@ Thanks to cnu for finding and reporting this bug.
 * Add ShowMOTD and reorder the HELP output of *status. (r1175)
 * Add /msg *status restart . Thanks to kroimon. (r1174)
 * Make --makeconf more userfriendly. Thanks to kroimon. (r1173)
-* Dont start a new znc process after --makeconf. Thanks to kroimon. (r1171)
+* Don't start a new znc process after --makeconf. Thanks to kroimon. (r1171)
 * Add CModule::PutModule(const CTable&). (r1168) (r1169)
 * Unify some preprocessor macros in Modules.cpp. (r1166)
 * Catch a throw UNLOAD from CModule::OnLoad(). (r1164)

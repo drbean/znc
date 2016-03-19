@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,33 +25,36 @@
 # undef seed
 #endif
 #include <utility>
-#include "../include/znc/Utils.h"
-#include "../include/znc/Threads.h"
-#include "../include/znc/Config.h"
-#include "../include/znc/Socket.h"
-#include "../include/znc/Modules.h"
-#include "../include/znc/Nick.h"
-#include "../include/znc/Chan.h"
-#include "../include/znc/User.h"
-#include "../include/znc/IRCNetwork.h"
-#include "../include/znc/Client.h"
-#include "../include/znc/IRCSock.h"
-#include "../include/znc/Listener.h"
-#include "../include/znc/HTTPSock.h"
-#include "../include/znc/Template.h"
-#include "../include/znc/WebModules.h"
-#include "../include/znc/znc.h"
-#include "../include/znc/Server.h"
-#include "../include/znc/ZNCString.h"
-#include "../include/znc/FileUtils.h"
-#include "../include/znc/ZNCDebug.h"
-#include "../include/znc/ExecSock.h"
-#include "../include/znc/Buffer.h"
+#include "znc/Utils.h"
+#include "znc/Threads.h"
+#include "znc/Config.h"
+#include "znc/Socket.h"
+#include "znc/Modules.h"
+#include "znc/Nick.h"
+#include "znc/Chan.h"
+#include "znc/User.h"
+#include "znc/IRCNetwork.h"
+#include "znc/Client.h"
+#include "znc/IRCSock.h"
+#include "znc/Listener.h"
+#include "znc/HTTPSock.h"
+#include "znc/Template.h"
+#include "znc/WebModules.h"
+#include "znc/znc.h"
+#include "znc/Server.h"
+#include "znc/ZNCString.h"
+#include "znc/FileUtils.h"
+#include "znc/ZNCDebug.h"
+#include "znc/ExecSock.h"
+#include "znc/Buffer.h"
 #include "modperl/module.h"
 #define stat struct stat
 %}
 
 %apply long { off_t };
+%apply long { uint16_t };
+%apply long { uint32_t };
+%apply long { uint64_t };
 
 %begin %{
 #include "znc/zncconfig.h"
@@ -102,6 +105,9 @@ class MCString : public std::map<CString, CString> {};
 %template(BufLines) std::deque<CBufLine>;
 %template(VVString) std::vector<VCString>;
 
+#define REGISTER_ZNC_MESSAGE(M) \
+    %template(As_ ## M) CMessage::As<M>;
+
 %typemap(out) std::map<CString, CNick> {
 	HV* myhv = newHV();
 	for (std::map<CString, CNick>::const_iterator i = $1.begin(); i != $1.end(); ++i) {
@@ -116,32 +122,34 @@ class MCString : public std::map<CString, CString> {};
 
 #define u_short unsigned short
 #define u_int unsigned int
-#include "../include/znc/zncconfig.h"
-#include "../include/znc/ZNCString.h"
-%include "../include/znc/defines.h"
-%include "../include/znc/Utils.h"
-%include "../include/znc/Threads.h"
-%include "../include/znc/Config.h"
-%include "../include/znc/Csocket.h"
+#include "znc/zncconfig.h"
+#include "znc/ZNCString.h"
+%include "znc/defines.h"
+%include "znc/Translation.h"
+%include "znc/Utils.h"
+%include "znc/Threads.h"
+%include "znc/Config.h"
+%include "znc/Csocket.h"
 %template(ZNCSocketManager) TSocketManager<CZNCSock>;
-%include "../include/znc/Socket.h"
-%include "../include/znc/FileUtils.h"
-%include "../include/znc/Modules.h"
-%include "../include/znc/Nick.h"
-%include "../include/znc/Chan.h"
-%include "../include/znc/User.h"
-%include "../include/znc/IRCNetwork.h"
-%include "../include/znc/Client.h"
-%include "../include/znc/IRCSock.h"
-%include "../include/znc/Listener.h"
-%include "../include/znc/HTTPSock.h"
-%include "../include/znc/Template.h"
-%include "../include/znc/WebModules.h"
-%include "../include/znc/znc.h"
-%include "../include/znc/Server.h"
-%include "../include/znc/ZNCDebug.h"
-%include "../include/znc/ExecSock.h"
-%include "../include/znc/Buffer.h"
+%include "znc/Socket.h"
+%include "znc/FileUtils.h"
+%include "znc/Message.h"
+%include "znc/Modules.h"
+%include "znc/Nick.h"
+%include "znc/Chan.h"
+%include "znc/User.h"
+%include "znc/IRCNetwork.h"
+%include "znc/Client.h"
+%include "znc/IRCSock.h"
+%include "znc/Listener.h"
+%include "znc/HTTPSock.h"
+%include "znc/Template.h"
+%include "znc/WebModules.h"
+%include "znc/znc.h"
+%include "znc/Server.h"
+%include "znc/ZNCDebug.h"
+%include "znc/ExecSock.h"
+%include "znc/Buffer.h"
 
 %include "modperl/module.h"
 
@@ -242,7 +250,7 @@ typedef std::vector<std::pair<CString, CString> > VPair;
 
 %inline %{
 	TWebSubPage _CreateWebSubPage(const CString& sName, const CString& sTitle, const VPair& vParams, unsigned int uFlags) {
-		return new CWebSubPage(sName, sTitle, vParams, uFlags);
+		return std::make_shared<CWebSubPage>(sName, sTitle, vParams, uFlags);
 	}
 %}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _DEFINES_H
-#define _DEFINES_H
+#ifndef ZNC_DEFINES_H
+#define ZNC_DEFINES_H
 
 #include <znc/zncconfig.h>
 
@@ -32,8 +32,9 @@
 #endif
 
 // Redefine some Csocket debugging mechanisms to use ZNC's
-#define CS_DEBUG(f)  DEBUG(__FILE__ << ":" << __LINE__ << " " << f)
-#define PERROR(f)    DEBUG(__FILE__ << ":" << __LINE__ << " " << f << ": " << strerror(GetSockError()))
+#define CS_DEBUG(f) DEBUG(__FILE__ << ":" << __LINE__ << " " << f)
+#define PERROR(f)                                         \
+    DEBUG(__FILE__ << ":" << __LINE__ << " " << f << ": " \
+                   << strerror(GetSockError()))
 
-
-#endif // !_DEFINES_H
+#endif  // !ZNC_DEFINES_H

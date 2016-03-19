@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef _WEBMODULES_H
-#define _WEBMODULES_H
+#ifndef ZNC_WEBMODULES_H
+#define ZNC_WEBMODULES_H
 
 #include <znc/zncconfig.h>
 #include <znc/Template.h>
 #include <znc/HTTPSock.h>
+#include <znc/Utils.h>
+#include <znc/Translation.h>
 
 class CAuthBase;
 class CUser;
@@ -27,143 +29,178 @@ class CWebSock;
 class CModule;
 class CWebSubPage;
 
-typedef CSmartPtr<CWebSubPage> TWebSubPage;
+typedef std::shared_ptr<CWebSubPage> TWebSubPage;
 typedef std::vector<TWebSubPage> VWebSubPages;
 
 class CZNCTagHandler : public CTemplateTagHandler {
-public:
-	CZNCTagHandler(CWebSock& pWebSock);
-	virtual ~CZNCTagHandler() {}
+  public:
+    CZNCTagHandler(CWebSock& pWebSock);
+    virtual ~CZNCTagHandler() {}
 
-	virtual bool HandleTag(CTemplate& Tmpl, const CString& sName, const CString& sArgs, CString& sOutput);
-private:
-	CWebSock& m_WebSock;
+    bool HandleTag(CTemplate& Tmpl, const CString& sName, const CString& sArgs,
+                   CString& sOutput) override;
+
+  private:
+    CWebSock& m_WebSock;
 };
-
 
 class CWebSession {
-public:
-	CWebSession(const CString& sId, const CString& sIP);
-	~CWebSession();
+  public:
+    CWebSession(const CString& sId, const CString& sIP);
+    ~CWebSession();
 
-	const CString& GetId() const { return m_sId; }
-	const CString& GetIP() const { return m_sIP; }
-	CUser* GetUser() const { return m_pUser; }
-	time_t GetLastActive() const { return m_tmLastActive; }
-	bool IsLoggedIn() const { return m_pUser != NULL; }
-	bool IsAdmin() const;
-	void UpdateLastActive();
+    CWebSession(const CWebSession&) = delete;
+    CWebSession& operator=(const CWebSession&) = delete;
 
-	CUser* SetUser(CUser* p) { m_pUser = p; return m_pUser; }
+    const CString& GetId() const { return m_sId; }
+    const CString& GetIP() const { return m_sIP; }
+    CUser* GetUser() const { return m_pUser; }
+    time_t GetLastActive() const { return m_tmLastActive; }
+    bool IsLoggedIn() const { return m_pUser != nullptr; }
+    bool IsAdmin() const;
+    void UpdateLastActive();
 
-	void ClearMessageLoops();
-	void FillMessageLoops(CTemplate& Tmpl);
-	size_t AddError(const CString& sMessage);
-	size_t AddSuccess(const CString& sMessage);
-private:
-	CString         m_sId;
-	CString         m_sIP;
-	CUser*          m_pUser;
-	VCString        m_vsErrorMsgs;
-	VCString        m_vsSuccessMsgs;
-	time_t          m_tmLastActive;
+    CUser* SetUser(CUser* p) {
+        m_pUser = p;
+        return m_pUser;
+    }
+
+    void ClearMessageLoops();
+    void FillMessageLoops(CTemplate& Tmpl);
+    size_t AddError(const CString& sMessage);
+    size_t AddSuccess(const CString& sMessage);
+
+  private:
+    CString m_sId;
+    CString m_sIP;
+    CUser* m_pUser;
+    VCString m_vsErrorMsgs;
+    VCString m_vsSuccessMsgs;
+    time_t m_tmLastActive;
 };
-
 
 class CWebSubPage {
-public:
-	CWebSubPage(const CString& sName, const CString& sTitle = "", unsigned int uFlags = 0) : m_sName(sName), m_sTitle(sTitle) {
-		m_uFlags = uFlags;
-	}
+  public:
+    CWebSubPage(const CString& sName, const CString& sTitle = "",
+                unsigned int uFlags = 0)
+        : m_uFlags(uFlags), m_sName(sName), m_sTitle(sTitle), m_vParams() {}
 
-	CWebSubPage(const CString& sName, const CString& sTitle, const VPair& vParams, unsigned int uFlags = 0) : m_sName(sName), m_sTitle(sTitle), m_vParams(vParams) {
-		m_uFlags = uFlags;
-	}
+    CWebSubPage(const CString& sName, const CString& sTitle,
+                const VPair& vParams, unsigned int uFlags = 0)
+        : m_uFlags(uFlags),
+          m_sName(sName),
+          m_sTitle(sTitle),
+          m_vParams(vParams) {}
 
-	virtual ~CWebSubPage() {}
+    CWebSubPage(const CString& sName, const CDelayedTranslation& dTitle,
+                const VPair& vParams, unsigned int uFlags = 0)
+        : m_uFlags(uFlags),
+          m_sName(sName),
+          m_dTitle(dTitle),
+          m_bTranslating(true),
+          m_vParams(vParams) {}
 
-	enum {
-		F_ADMIN = 1
-	};
+    virtual ~CWebSubPage() {}
 
-	void SetName(const CString& s) { m_sName = s; }
-	void SetTitle(const CString& s) { m_sTitle = s; }
-	void AddParam(const CString& sName, const CString& sValue) { m_vParams.push_back(make_pair(sName, sValue)); }
+    enum { F_ADMIN = 1 };
 
-	bool RequiresAdmin() const { return m_uFlags & F_ADMIN; }
+    void SetName(const CString& s) { m_sName = s; }
+    void SetTitle(const CString& s) {
+        m_sTitle = s;
+        m_bTranslating = false;
+    }
+    void SetTitle(const CDelayedTranslation& d) {
+        m_dTitle = d;
+        m_bTranslating = true;
+    }
+    void AddParam(const CString& sName, const CString& sValue) {
+        m_vParams.push_back(make_pair(sName, sValue));
+    }
 
-	const CString& GetName() const { return m_sName; }
-	const CString& GetTitle() const { return m_sTitle; }
-	const VPair& GetParams() const { return m_vParams; }
-private:
-	unsigned int    m_uFlags;
-	CString         m_sName;
-	CString         m_sTitle;
-	VPair           m_vParams;
+    bool RequiresAdmin() const { return m_uFlags & F_ADMIN; }
+
+    const CString& GetName() const { return m_sName; }
+    CString GetTitle() const;
+    const VPair& GetParams() const { return m_vParams; }
+
+  private:
+    unsigned int m_uFlags;
+    CString m_sName;
+    CString m_sTitle;
+    CDelayedTranslation m_dTitle;
+    bool m_bTranslating = false;
+    VPair m_vParams;
 };
 
-class CWebSessionMap : public TCacheMap<CString, CSmartPtr<CWebSession> > {
-	public:
-		CWebSessionMap(unsigned int uTTL = 5000) : TCacheMap<CString, CSmartPtr<CWebSession> >(uTTL) {}
-		void FinishUserSessions(const CUser& User);
+class CWebSessionMap : public TCacheMap<CString, std::shared_ptr<CWebSession>> {
+  public:
+    CWebSessionMap(unsigned int uTTL = 5000)
+        : TCacheMap<CString, std::shared_ptr<CWebSession>>(uTTL) {}
+    void FinishUserSessions(const CUser& User);
 };
 
 class CWebSock : public CHTTPSock {
-public:
-	enum EPageReqResult {
-		PAGE_NOTFOUND, // print 404 and Close()
-		PAGE_PRINT,    // print page contents and Close()
-		PAGE_DEFERRED, // async processing, Close() will be called from a different place
-		PAGE_DONE      // all stuff has been done
-	};
+  public:
+    enum EPageReqResult {
+        PAGE_NOTFOUND,  // print 404 and Close()
+        PAGE_PRINT,     // print page contents and Close()
+        PAGE_DEFERRED,  // async processing, Close() will be called from a
+                        // different place
+        PAGE_DONE       // all stuff has been done
+    };
 
-	CWebSock(const CString& sURIPrefix);
-	virtual ~CWebSock();
+    CWebSock(const CString& sURIPrefix);
+    virtual ~CWebSock();
 
-	virtual bool ForceLogin();
-	virtual bool OnLogin(const CString& sUser, const CString& sPass);
-	virtual void OnPageRequest(const CString& sURI);
+    bool ForceLogin() override;
+    bool OnLogin(const CString& sUser, const CString& sPass,
+                 bool bBasic) override;
+    void OnPageRequest(const CString& sURI) override;
 
-	EPageReqResult PrintTemplate(const CString& sPageName, CString& sPageRet, CModule* pModule = NULL);
-	EPageReqResult PrintStaticFile(const CString& sPath, CString& sPageRet, CModule* pModule = NULL);
+    EPageReqResult PrintTemplate(const CString& sPageName, CString& sPageRet,
+                                 CModule* pModule = nullptr);
+    EPageReqResult PrintStaticFile(const CString& sPath, CString& sPageRet,
+                                   CModule* pModule = nullptr);
 
-	CString FindTmpl(CModule* pModule, const CString& sName);
+    CString FindTmpl(CModule* pModule, const CString& sName);
 
-	void PrintErrorPage(const CString& sMessage);
+    void PrintErrorPage(const CString& sMessage);
 
-	CSmartPtr<CWebSession> GetSession();
+    std::shared_ptr<CWebSession> GetSession();
 
-	virtual Csock* GetSockObj(const CString& sHost, unsigned short uPort);
-	static CString GetSkinPath(const CString& sSkinName);
-	void GetAvailSkins(VCString& vRet) const;
-	CString GetSkinName();
+    Csock* GetSockObj(const CString& sHost, unsigned short uPort) override;
+    static CString GetSkinPath(const CString& sSkinName);
+    void GetAvailSkins(VCString& vRet) const;
+    CString GetSkinName();
 
-	CString GetRequestCookie(const CString& sKey);
-	bool SendCookie(const CString& sKey, const CString& sValue);
+    CString GetRequestCookie(const CString& sKey);
+    bool SendCookie(const CString& sKey, const CString& sValue);
 
-	static void FinishUserSessions(const CUser& User);
+    static void FinishUserSessions(const CUser& User);
 
-protected:
-	using CHTTPSock::PrintErrorPage;
+  protected:
+    using CHTTPSock::PrintErrorPage;
 
-	bool AddModLoop(const CString& sLoopName, CModule& Module, CTemplate *pTemplate = NULL);
-	VCString GetDirs(CModule* pModule, bool bIsTemplate);
-	void SetPaths(CModule* pModule, bool bIsTemplate = false);
-	void SetVars();
-	CString GetCSRFCheck();
+    bool AddModLoop(const CString& sLoopName, CModule& Module,
+                    CTemplate* pTemplate = nullptr);
+    VCString GetDirs(CModule* pModule, bool bIsTemplate);
+    void SetPaths(CModule* pModule, bool bIsTemplate = false);
+    void SetVars();
+    CString GetCSRFCheck();
 
-private:
-	EPageReqResult OnPageRequestInternal(const CString& sURI, CString& sPageRet);
+  private:
+    EPageReqResult OnPageRequestInternal(const CString& sURI,
+                                         CString& sPageRet);
 
-	bool                    m_bPathsSet;
-	CTemplate               m_Template;
-	CSmartPtr<CAuthBase>    m_spAuth;
-	CString                 m_sModName;
-	CString                 m_sPath;
-	CString                 m_sPage;
-	CSmartPtr<CWebSession>  m_spSession;
+    bool m_bPathsSet;
+    CTemplate m_Template;
+    std::shared_ptr<CAuthBase> m_spAuth;
+    CString m_sModName;
+    CString m_sPath;
+    CString m_sPage;
+    std::shared_ptr<CWebSession> m_spSession;
 
-	static const unsigned int m_uiMaxSessions;
+    static const unsigned int m_uiMaxSessions;
 };
 
-#endif // !_WEBMODULES_H
+#endif  // !ZNC_WEBMODULES_H

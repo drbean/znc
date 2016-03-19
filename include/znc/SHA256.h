@@ -31,11 +31,11 @@
  * SUCH DAMAGE.
  */
 
-#ifndef SHA2_H
-#define SHA2_H
+#ifndef ZNC_SHA2_H
+#define ZNC_SHA2_H
 
-#define SHA256_DIGEST_SIZE ( 256 / 8)
-#define SHA256_BLOCK_SIZE  ( 512 / 8)
+#define SHA256_DIGEST_SIZE (256 / 8)
+#define SHA256_BLOCK_SIZE (512 / 8)
 
 #include <znc/zncconfig.h>
 
@@ -53,12 +53,9 @@ typedef struct {
     uint32_t h[8];
 } sha256_ctx;
 
-void sha256_init(sha256_ctx * ctx);
-void sha256_update(sha256_ctx *ctx, const unsigned char *message,
-                   size_t len);
-void sha256_final(sha256_ctx *ctx, unsigned char *digest);
-void sha256(const unsigned char *message, size_t len,
-            unsigned char *digest);
+void sha256_init(sha256_ctx* ctx);
+void sha256_update(sha256_ctx* ctx, const unsigned char* message, size_t len);
+void sha256_final(sha256_ctx* ctx, unsigned char* digest);
+void sha256(const unsigned char* message, size_t len, unsigned char* digest);
 
-#endif /* !SHA2_H */
-
+#endif /* !ZNC_SHA2_H */

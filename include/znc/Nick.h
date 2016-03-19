@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _NICK_H
-#define _NICK_H
+#ifndef ZNC_NICK_H
+#define ZNC_NICK_H
 
 #include <znc/zncconfig.h>
 #include <znc/ZNCString.h>
@@ -26,46 +26,50 @@ class CIRCNetwork;
 class CChan;
 // !Forward Decl
 
-class CNick
-{
-public:
-	CNick();
-	CNick(const CString& sNick);
-	~CNick();
+class CNick {
+  public:
+    CNick();
+    CNick(const CString& sNick);
+    ~CNick();
 
-	void Reset();
-	void Parse(const CString& sNickMask);
-	CString GetHostMask() const;
-	size_t GetCommonChans(std::vector<CChan*>& vChans, CIRCNetwork* pNetwork) const;
-	bool NickEquals(const CString& nickname) const;
+    CNick(const CNick&) = default;
+    CNick& operator=(const CNick&) = default;
 
-	// Setters
-	void SetNetwork(CIRCNetwork* pNetwork);
-	void SetNick(const CString& s);
-	void SetIdent(const CString& s);
-	void SetHost(const CString& s);
-	bool AddPerm(unsigned char uPerm);
-	bool RemPerm(unsigned char uPerm);
-	// !Setters
+    void Reset();
+    void Parse(const CString& sNickMask);
+    CString GetHostMask() const;
+    size_t GetCommonChans(std::vector<CChan*>& vChans,
+                          CIRCNetwork* pNetwork) const;
+    bool NickEquals(const CString& nickname) const;
 
-	// Getters
-	CString GetPermStr() const;
-	unsigned char GetPermChar() const;
-	bool HasPerm(unsigned char uPerm) const;
-	const CString& GetNick() const;
-	const CString& GetIdent() const;
-	const CString& GetHost() const;
-	CString GetNickMask() const;
-	// !Getters
+    // Setters
+    void SetNetwork(CIRCNetwork* pNetwork);
+    void SetNick(const CString& s);
+    void SetIdent(const CString& s);
+    void SetHost(const CString& s);
+    bool AddPerm(unsigned char uPerm);
+    bool RemPerm(unsigned char uPerm);
+    // !Setters
 
-	void Clone(const CNick& SourceNick);
-private:
-protected:
-	CString      m_sChanPerms;
-	CIRCNetwork* m_pNetwork;
-	CString      m_sNick;
-	CString      m_sIdent;
-	CString      m_sHost;
+    // Getters
+    CString GetPermStr() const;
+    unsigned char GetPermChar() const;
+    bool HasPerm(unsigned char uPerm) const;
+    const CString& GetNick() const;
+    const CString& GetIdent() const;
+    const CString& GetHost() const;
+    CString GetNickMask() const;
+    // !Getters
+
+    void Clone(const CNick& SourceNick);
+
+  private:
+  protected:
+    CString m_sChanPerms;
+    CIRCNetwork* m_pNetwork;
+    CString m_sNick;
+    CString m_sIdent;
+    CString m_sHost;
 };
 
-#endif // !_NICK_H
+#endif  // !ZNC_NICK_H

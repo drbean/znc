@@ -6,8 +6,9 @@ AC_DEFUN([AC_PROG_CC], [m4_errprint(__file__:__line__[: Something is trying to u
 
 dnl Needed for AC_PATH_PROGS_FEATURE_CHECK which was added in 2.62
 AC_PREREQ([2.62])
-dnl Keep the version number in sync with main.h!
-AC_INIT([znc], [1.5])
+dnl Keep the version number in sync with version.h!
+AC_INIT([znc], [1.7.x])
+LIBZNC_VERSION=1.7
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/znc.cpp])
 AC_LANG([C++])
@@ -32,16 +33,8 @@ AC_PROG_CXX
 # "Optional" because we want custom error message
 AX_CXX_COMPILE_STDCXX_11([noext], [optional])
 if test x"$HAVE_CXX11" != x1; then
-	AC_MSG_ERROR([Either upgrade your compiler, or use ZNC 1.4])
+	AC_MSG_ERROR([Upgrade your compiler. GCC 4.7+ and Clang 3.2+ are known to work.])
 fi
-
-AC_PROG_INSTALL
-AC_PROG_GREP
-AC_PROG_SED
-AC_CANONICAL_HOST
-AC_SYS_LARGEFILE
-ZNC_VISIBILITY
-AC_PATH_PROG([GIT], [git])
 
 appendLib () {
 	if test "$LIBS" != ""; then
@@ -75,32 +68,15 @@ appendLD () {
 	fi
 }
 
-case "${host_os}" in
-	freebsd*)
-		# -D__GNU_LIBRARY__ makes this work on fbsd 4.11
-		appendCXX -I/usr/local/include -D__GNU_LIBRARY__
-		appendLib -L/usr/local/lib -lcompat
-		appendMod -L/usr/local/lib
-	;;
-	solaris*)
-		appendLib -lsocket -lnsl -lresolv
-		ISSUN=1
-	;;
-	cygwin)
-		# We don't want to use -std=gnu++11 instead of -std=c++11, but among other things, -std=c++11 defines __STRICT_ANSI__ which makes cygwin not to compile: undefined references to strerror_r, to fdopen, to strcasecmp, etc (their declarations in system headers are between ifdef)
-		appendCXX -U__STRICT_ANSI__
-		ISCYGWIN=1
-	;;
-	darwin*)
-		ISDARWIN=1
-	;;
-esac
-
+AC_PROG_INSTALL
+AC_PROG_GREP
+AC_PROG_SED
+AC_CANONICAL_HOST
+AC_SYS_LARGEFILE
+ZNC_VISIBILITY
+AC_PATH_PROG([GIT], [git])
 PKG_PROG_PKG_CONFIG()
 
-AC_ARG_WITH( [openssl],
-	AS_HELP_STRING([--with-openssl=DIR], [openssl installation prefix]),
-	[OPENSSL=$withval],)
 AC_ARG_ENABLE( [debug],
 	AS_HELP_STRING([--enable-debug], [enable debugging]),
 	[DEBUG="$enableval"],
@@ -158,9 +134,22 @@ AC_ARG_ENABLE( [poll],
 	AS_HELP_STRING([--disable-poll], [use select() instead of poll()]),
 	[POLL="$enableval"],
 	[POLL="yes"])
+
 AC_ARG_WITH( [gtest],
-	AS_HELP_STRING([--with-gtest=DIR], [Path to directory with src/gtest-all.cc and src/gtest_main.cc files.
-					If not specified, "make test" will download gtest tarball and use it.]))
+	AS_HELP_STRING([--with-gtest=DIR], [Path to directory with src/gtest-all.cc file.
+					If not specified, git submodule will be used.
+					If it is not available either, "make test" will fail.]))
+if test "x$with_gtest" != xno; then
+	AC_SUBST([GTEST_DIR], [$with_gtest])
+fi
+AC_ARG_WITH([gmock],
+	AS_HELP_STRING([--with-gmock=DIR], [Path to directory with src/gmock-all.cc and src/gmock_main.cc files.
+					If not specified, git submodule will be used.
+					If it is not available either, "make test" will fail.]))
+if test "x$with_gmock" != xno; then
+	AC_SUBST([GMOCK_DIR], [$with_gmock])
+fi
+
 
 AC_ARG_WITH([systemdsystemunitdir],
 	AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
@@ -169,31 +158,80 @@ AC_ARG_WITH([systemdsystemunitdir],
 			with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
 		fi
 	])
-if test "x$with_gtest" != xno; then
-	AC_SUBST([GTEST_DIR], [$with_gtest])
-fi
 if test "x$with_systemdsystemunitdir" != xno; then
 	AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 fi
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != xno ])
 
-# In old times needed to define _FORTIFY_SOURCE to 2 ourself.
-# Then GCC started to define it itself to 2. It was ok.
-# But then GCC 4.7 started to define it to 0 or 2 depending on optimization level, and it started to conflict with our define.
-AC_MSG_CHECKING([whether compiler predefines _FORTIFY_SOURCE])
-AC_COMPILE_IFELSE([
-	AC_LANG_PROGRAM([[
-	]], [[
-		#ifndef _FORTIFY_SOURCE
-		#error "Just checking, nothing fatal here"
-		#endif
-	]])
-], [
-	AC_MSG_RESULT([yes])
-], [
-	AC_MSG_RESULT([no])
-	appendCXX "-D_FORTIFY_SOURCE=2"
-])
+case "${host_os}" in
+	freebsd*)
+		# -D__GNU_LIBRARY__ makes this work on fbsd 4.11
+		appendCXX -I/usr/local/include -D__GNU_LIBRARY__
+		appendLib -L/usr/local/lib -lcompat
+		appendMod -L/usr/local/lib
+	;;
+	solaris*)
+		appendLib -lsocket -lnsl -lresolv
+		ISSUN=1
+	;;
+	cygwin)
+		# We don't want to use -std=gnu++11 instead of -std=c++11, but among other things, -std=c++11 defines __STRICT_ANSI__ which makes cygwin not to compile: undefined references to strerror_r, to fdopen, to strcasecmp, etc (their declarations in system headers are between ifdef)
+		appendCXX -U__STRICT_ANSI__
+		ISCYGWIN=1
+	;;
+	darwin*)
+		ISDARWIN=1
+
+		AC_PATH_PROG([BREW], [brew])
+		if test -n "$BREW"; then
+			# add default homebrew paths
+
+			if test "x$HAVE_ICU" != "xno"; then
+				AC_MSG_CHECKING([icu4c via homebrew])
+				icu4c_prefix=`$BREW --prefix icu4c`
+				if test -n "$icu4c_prefix"; then
+					export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$icu4c_prefix/lib/pkgconfig"
+					AC_MSG_RESULT([$icu4c_prefix])
+				else
+					AC_MSG_RESULT([no])
+				fi
+			fi
+
+			if test "x$PYTHON" != "xno"; then
+				brew_python_pc="$PYTHON"
+				# This is duplication of non-darwin python logic below...
+				if test "x$brew_python_pc" = "xyes"; then
+					brew_python_pc="python3"
+				fi
+				AC_MSG_CHECKING([python3 via homebrew])
+				python3_prefix=`$BREW --prefix python3`
+				if test -n "$python3_prefix"; then
+					python3_prefix=`find "$python3_prefix/" -name $brew_python_pc.pc | head -n1`
+					if test -n "$python3_prefix"; then
+						python3_prefix=`dirname "$python3_prefix"`
+						export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$python3_prefix"
+						AC_MSG_RESULT([$python3_prefix])
+					else
+						AC_MSG_RESULT([no $brew_python_pc.pc found])
+					fi
+				else
+					AC_MSG_RESULT([no])
+				fi
+			fi
+
+			if test "x$SSL" != "xno"; then
+				AC_MSG_CHECKING([openssl via homebrew])
+				openssl_prefix=`$BREW --prefix openssl`
+				if test -n "$openssl_prefix"; then
+					export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$openssl_prefix/lib/pkgconfig"
+					AC_MSG_RESULT([$openssl_prefix])
+				else
+					AC_MSG_RESULT([no])
+				fi
+			fi
+		fi
+	;;
+esac
 
 if test "$DEBUG" != "no"; then
 	appendCXX -ggdb3
@@ -207,6 +245,24 @@ if test "$DEBUG" != "no"; then
 else
 	if test "x$OPTIMIZE" = "xyes"; then
 		appendCXX -O2
+
+		# In old times needed to define _FORTIFY_SOURCE to 2 ourself.
+		# Then GCC started to define it itself to 2. It was ok.
+		# But then GCC 4.7 started to define it to 0 or 2 depending on optimization level, and it started to conflict with our define.
+		AC_MSG_CHECKING([whether compiler predefines _FORTIFY_SOURCE])
+		AC_COMPILE_IFELSE([
+			AC_LANG_PROGRAM([[
+			]], [[
+				#ifndef _FORTIFY_SOURCE
+				#error "Just checking, nothing fatal here"
+				#endif
+			]])
+		], [
+			AC_MSG_RESULT([yes])
+		], [
+			AC_MSG_RESULT([no])
+			appendCXX "-D_FORTIFY_SOURCE=2"
+		])
 	fi
 fi
 
@@ -240,7 +296,7 @@ if test "$POLL" = "yes"; then
 fi
 
 AC_CHECK_LIB( gnugetopt, getopt_long,)
-AC_CHECK_FUNCS([lstat getopt_long getpassphrase])
+AC_CHECK_FUNCS([lstat getopt_long getpassphrase clock_gettime tcsetattr])
 
 # ----- Check for dlopen
 
@@ -249,33 +305,36 @@ AC_SEARCH_LIBS([dlopen], [dl], [],
 
 # ----- Check for pthreads
 
+AX_PTHREAD([
+	AC_DEFINE([HAVE_PTHREAD], [1], [Define if you have POSIX threads libraries and header files.])
+	appendCXX "$PTHREAD_CFLAGS"
+	appendLib "$PTHREAD_LIBS"
+], [
+	AC_MSG_ERROR([This compiler/OS doesn't seem to support pthreads.])
+])
+
+# Note that old broken systems, such as OpenBSD, NetBSD, which don't support AI_ADDRCONFIG, also have thread-unsafe getaddrinfo().
+# Gladly, they fixed thread-safety before support of AI_ADDRCONFIG, so this can be abused to detect the thread-safe getaddrinfo().
+#
+# TODO: drop support of blocking DNS at some point. OpenBSD supports AI_ADDRCONFIG since Nov 2014, and their getaddrinfo() is thread-safe since Nov 2013. NetBSD's one is thread-safe since ages ago.
 DNS_TEXT=blocking
 if test "x$TDNS" != "xno"; then
 	old_TDNS=$TDNS
-	AX_PTHREAD([
-        	AC_DEFINE([HAVE_PTHREAD], [1], [Define if you have POSIX threads libraries and header files.])
-		appendCXX "$PTHREAD_CFLAGS"
-		appendLib "$PTHREAD_LIBS"
-		AC_MSG_CHECKING([whether getaddrinfo() supports AI_ADDRCONFIG])
-		AC_COMPILE_IFELSE([
-			AC_LANG_PROGRAM([[
-				#include <sys/types.h>
-				#include <sys/socket.h>
-				#include <netdb.h>
-			]], [[
-				int x = AI_ADDRCONFIG;
-				(void) x;
-			]])
-		], [
-			AC_MSG_RESULT([yes])
-			TDNS=yes
-		], [
-			AC_MSG_RESULT([no])
-			TDNS=no
-			# Note that broken systems, such as OpenBSD, NetBSD, which don't support AI_ADDRCONFIG,
-			# also have thread-unsafe getaddrinfo().
-		])
+	AC_MSG_CHECKING([whether getaddrinfo() supports AI_ADDRCONFIG])
+	AC_COMPILE_IFELSE([
+		AC_LANG_PROGRAM([[
+			#include <sys/types.h>
+			#include <sys/socket.h>
+			#include <netdb.h>
+		]], [[
+			int x = AI_ADDRCONFIG;
+			(void) x;
+		]])
 	], [
+		AC_MSG_RESULT([yes])
+		TDNS=yes
+	], [
+		AC_MSG_RESULT([no])
 		TDNS=no
 	])
 	if test "x$TDNS" = "xyes"; then
@@ -293,13 +352,6 @@ fi
 
 SSL_TEXT="$SSL"
 if test "x$SSL" != "xno"; then
-	if test -n "$OPENSSL"; then
-		appendLib -L${OPENSSL}/lib
-		appendLib -L${OPENSSL}/lib64
-		appendCXX -I${OPENSSL}/include
-		PKG_CONFIG_PATH="$OPENSSL/lib/pkgconfig/:$OPENSSL/lib64/pkgconfig/:$PKG_CONFIG_PATH"
-	fi
-
 	old_SSL=$SSL
 	PKG_CHECK_MODULES([openssl], [openssl], [
 		appendLib "$openssl_LIBS"
@@ -331,7 +383,7 @@ if test "x$SSL" != "xno"; then
 			SSL=no
 			SSL_TEXT="no (openssl not usable)"
 		])
-		
+
 	fi
 
 	if test "x$SSL" = "xno" ; then
@@ -383,6 +435,30 @@ if test "x$ZLIB" != "xno"; then
 	fi
 fi
 
+AC_ARG_ENABLE( [charset],
+	AS_HELP_STRING([--disable-charset], [disable ICU support]),
+	[HAVE_ICU="$enableval"],
+	[HAVE_ICU="auto"])
+if test "x$HAVE_ICU" != "xno"
+then
+	old_HAVE_ICU="$HAVE_ICU"
+	PKG_CHECK_MODULES([icu], [icu-uc], [
+		appendLib "$icu_LIBS"
+		appendCXX "$icu_CFLAGS"
+		HAVE_ICU=yes
+		AC_DEFINE([HAVE_ICU], [1], [Enable ICU library for Unicode handling])
+		AC_DEFINE([U_USING_ICU_NAMESPACE], [0], [Do not clutter global namespace with ICU C++ stuff])
+	], [
+		ZNC_AUTO_FAIL([HAVE_ICU],
+			      [support for charset conversion not found. Try --disable-charset.],
+			      [support for charset conversion not found and thus disabled])
+		HAVE_ICU="no (icu-uc not found via pkg-config)"
+	])
+fi
+
+# For integration test only
+PKG_CHECK_MODULES([qt], [Qt5Network >= 5.4], [], [:])
+
 AC_ARG_WITH( [module-prefix],
 	AS_HELP_STRING([--with-module-prefix], [module object code [LIBDIR/znc]]),
 	[MODDIR=$withval],
@@ -408,8 +484,11 @@ if test -z "$ISCYGWIN" ; then
 	appendMod -fPIC
 else
 	# But cygwin does want most of ZNC in a shared lib
-	LIBZNC="libznc.dll"
+	# See https://cygwin.com/ml/cygwin-apps/2015-07/msg00108.html for the reasoning behind the name.
+	LIBZNC="cygznc-${LIBZNC_VERSION}.dll"
 	LIBZNCDIR="$bindir"
+	# See above about __STRICT_ANSI__
+	qt_CFLAGS="$qt_CFLAGS -U__STRICT_ANSI__"
 fi
 
 if test -z "$ISDARWIN"; then
@@ -432,12 +511,12 @@ if test "x$PERL" != xno -o "x$PYTHON" != xno; then
 			AC_MSG_ERROR([Could not found appropriate SWIG installation. Check config.log for details.])
 		fi
 	fi
-	if test -r "$srcdir/modules/modperl/ZNC.cpp" -a -r "$srcdir/modules/modpython/_znc_core.cpp"; then
+	if test -r "$srcdir/modules/modperl/generated.tar.gz" -a -r "$srcdir/modules/modpython/generated.tar.gz"; then
 		AC_MSG_NOTICE([modperl/modpython files are found, disabling SWIG])
 		USESWIG=no
 	fi
 	if test "x$USESWIG" = xno; then
-		if test ! -r "$srcdir/modules/modperl/ZNC.cpp" -o ! -r "$srcdir/modules/modpython/_znc_core.cpp"; then
+		if test ! -r "$srcdir/modules/modperl/generated.tar.gz" -o ! -r "$srcdir/modules/modpython/generated.tar.gz"; then
 			AC_MSG_ERROR([Can not build modperl/modpython. Either install SWIG, or build ZNC from a tarball, or disable modperl/modpython. Check config.log for details.])
 		else
 			AC_MSG_NOTICE([modperl/modpython files are found, no SWIG needed])
@@ -505,6 +584,9 @@ if test "x$PYTHON" != "xno"; then
 		LIBS="$my_saved_LIBS"
 		CXXFLAGS="$my_saved_CXXFLAGS"
 	fi
+	if test "x$HAVE_ICU" != "xyes"; then
+		AC_MSG_ERROR([Modpython requires ZNC to be compiled with charset support, but ICU library not found. Try --disable-python or install libicu.])
+	fi
 	if test "x$PYTHON" = "xno"; then
 		ZNC_AUTO_FAIL([PYTHON],
 			[python not found. Try --disable-python.],
@@ -542,7 +624,7 @@ then
 
 	# This will need to be extended in the future, but I don't think
 	# it's a good idea to stuff a shitload of random stuff in here right now
-	for path in $TCL_DIR /usr/lib /usr/lib/tcl8.4 /usr/lib/tcl8.5
+	for path in $TCL_DIR /usr/lib /usr/lib/tcl8.4 /usr/lib/tcl8.5 /usr/lib/tcl8.6
 	do
 		file="${path}/tclConfig.sh"
 		AC_MSG_CHECKING([for ${file}])
@@ -578,27 +660,6 @@ then
 	LIBS="$my_saved_LIBS"
 fi
 
-AC_ARG_ENABLE( [charset],
-	AS_HELP_STRING([--disable-charset], [disable ICU support]),
-	[HAVE_ICU="$enableval"],
-	[HAVE_ICU="auto"])
-if test "x$HAVE_ICU" != "xno"
-then
-	old_HAVE_ICU="$HAVE_ICU"
-	PKG_CHECK_MODULES([icu], [icu-uc], [
-		appendLib "$icu_LIBS"
-		appendCXX "$icu_CFLAGS"
-		HAVE_ICU=yes
-		AC_DEFINE([HAVE_ICU], [1], [Enable ICU library for Unicode handling])
-		AC_DEFINE([U_USING_ICU_NAMESPACE], [0], [Do not clutter global namespace with ICU C++ stuff])
-	], [
-		ZNC_AUTO_FAIL([HAVE_ICU],
-			      [support for charset conversion not found. Try --disable-charset.],
-			      [support for charset conversion not found and thus disabled])
-		HAVE_ICU="no (icu-uc not found via pkg-config)"
-	])
-fi
-
 AC_CACHE_CHECK([for GNU make], [ac_cv_path_GNUMAKE], [
 	AC_PATH_PROGS_FEATURE_CHECK([GNUMAKE], [make gmake], [[
 			if $ac_path_GNUMAKE --version | $GREP GNU > /dev/null; then
@@ -608,8 +669,7 @@ AC_CACHE_CHECK([for GNU make], [ac_cv_path_GNUMAKE], [
 		]], [AC_MSG_ERROR([could not find GNU make])]
 	)
 ])
-GNUMAKE_DIRNAME=`AS_DIRNAME(["$ac_cv_path_GNUMAKE"])`
-GNUMAKE=`echo $ac_cv_path_GNUMAKE | $SED "s%$GNUMAKE_DIRNAME/%%"`
+GNUMAKE=`echo $ac_cv_path_GNUMAKE | $SED "s%.*/%%"`
 
 # this is in the end, for not trying to include it when it doesn't exist yet
 appendCXX "-include znc/zncconfig.h"
@@ -634,6 +694,8 @@ AC_SUBST([PYTHON])
 AC_SUBST([SWIG])
 AC_SUBST([python_CFLAGS])
 AC_SUBST([python_LIBS])
+AC_SUBST([qt_CFLAGS])
+AC_SUBST([qt_LIBS])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([znc-buildmod])
 AC_CONFIG_FILES([man/Makefile])

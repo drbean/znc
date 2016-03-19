@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,28 @@
 #include <iostream>
 #include <sys/time.h>
 #include <stdio.h>
+#include <time.h>
 
 bool CDebug::stdoutIsTTY = true;
 bool CDebug::debug =
 #ifdef _DEBUG
-		true;
+    true;
 #else
-		false;
+    false;
 #endif
 
 CDebugStream::~CDebugStream() {
-	timeval tTime;
-	gettimeofday(&tTime, NULL);
-	time_t tSec = (time_t)tTime.tv_sec; // some systems (e.g. openbsd) define tv_sec as long int instead of time_t
-	tm tM;
-	tzset();// localtime_r requires this
-	localtime_r(&tSec, &tM);
-	char sTime[20] = {};
-	strftime(sTime, sizeof(sTime), "%Y-%m-%d %H:%M:%S", &tM);
-	char sUsec[7] = {};
-	snprintf(sUsec, sizeof(sUsec), "%06lu", (unsigned long int)tTime.tv_usec);
-	std::cout << "[" << sTime << "." << sUsec << "] " << CString(this->str()).Escape_n(CString::EDEBUG) << std::endl;
+    timeval tTime;
+    gettimeofday(&tTime, nullptr);
+    time_t tSec = (time_t)tTime.tv_sec;  // some systems (e.g. openbsd) define
+                                         // tv_sec as long int instead of time_t
+    tm tM;
+    tzset();  // localtime_r requires this
+    localtime_r(&tSec, &tM);
+    char sTime[20] = {};
+    strftime(sTime, sizeof(sTime), "%Y-%m-%d %H:%M:%S", &tM);
+    char sUsec[7] = {};
+    snprintf(sUsec, sizeof(sUsec), "%06lu", (unsigned long int)tTime.tv_usec);
+    std::cout << "[" << sTime << "." << sUsec << "] "
+              << CString(this->str()).Escape_n(CString::EDEBUG) << std::endl;
 }

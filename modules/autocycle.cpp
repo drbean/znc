@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,234 +20,215 @@
 using std::vector;
 
 class CAutoCycleMod : public CModule {
-public:
-	MODCONSTRUCTOR(CAutoCycleMod) {
-		m_recentlyCycled.SetTTL(15 * 1000);
-	}
+  public:
+    MODCONSTRUCTOR(CAutoCycleMod) {
+        AddHelpCommand();
+        AddCommand("Add", static_cast<CModCommand::ModCmdFunc>(
+                              &CAutoCycleMod::OnAddCommand),
+                   "[!]<#chan>",
+                   "Add an entry, use !#chan to negate and * for wildcards");
+        AddCommand("Del", static_cast<CModCommand::ModCmdFunc>(
+                              &CAutoCycleMod::OnDelCommand),
+                   "[!]<#chan>", "Remove an entry, needs to be an exact match");
+        AddCommand("List", static_cast<CModCommand::ModCmdFunc>(
+                               &CAutoCycleMod::OnListCommand),
+                   "", "List all entries");
+        m_recentlyCycled.SetTTL(15 * 1000);
+    }
 
-	virtual ~CAutoCycleMod() {}
+    ~CAutoCycleMod() override {}
 
-	virtual bool OnLoad(const CString& sArgs, CString& sMessage) {
-		VCString vsChans;
-		sArgs.Split(" ", vsChans, false);
+    bool OnLoad(const CString& sArgs, CString& sMessage) override {
+        VCString vsChans;
+        sArgs.Split(" ", vsChans, false);
 
-		for (VCString::const_iterator it = vsChans.begin(); it != vsChans.end(); ++it) {
-			if (!Add(*it)) {
-				PutModule("Unable to add [" + *it + "]");
-			}
-		}
+        for (const CString& sChan : vsChans) {
+            if (!Add(sChan)) {
+                PutModule("Unable to add [" + sChan + "]");
+            }
+        }
 
-		// Load our saved settings, ignore errors
-		MCString::iterator it;
-		for (it = BeginNV(); it != EndNV(); ++it) {
-			Add(it->first);
-		}
+        // Load our saved settings, ignore errors
+        MCString::iterator it;
+        for (it = BeginNV(); it != EndNV(); ++it) {
+            Add(it->first);
+        }
 
-		// Default is auto cycle for all channels
-		if (m_vsChans.empty())
-			Add("*");
+        // Default is auto cycle for all channels
+        if (m_vsChans.empty()) Add("*");
 
-		return true;
-	}
+        return true;
+    }
 
-	virtual void OnModCommand(const CString& sLine) {
-		CString sCommand = sLine.Token(0);
+    void OnAddCommand(const CString& sLine) {
+        CString sChan = sLine.Token(1);
 
-		if (sCommand.Equals("ADD")) {
-			CString sChan = sLine.Token(1);
+        if (AlreadyAdded(sChan)) {
+            PutModule(sChan + " is already added");
+        } else if (Add(sChan)) {
+            PutModule("Added " + sChan + " to list");
+        } else {
+            PutModule("Usage: Add [!]<#chan>");
+        }
+    }
 
-			if (AlreadyAdded(sChan)) {
-				PutModule(sChan + " is already added");
-			} else if (Add(sChan)) {
-				PutModule("Added " + sChan + " to list");
-			} else {
-				PutModule("Usage: Add [!]<#chan>");
-			}
-		} else if (sCommand.Equals("DEL")) {
-			CString sChan = sLine.Token(1);
+    void OnDelCommand(const CString& sLine) {
+        CString sChan = sLine.Token(1);
 
-			if (Del(sChan))
-				PutModule("Removed " + sChan + " from list");
-			else
-				PutModule("Usage: Del [!]<#chan>");
-		} else if (sCommand.Equals("LIST")) {
-			CTable Table;
-			Table.AddColumn("Chan");
+        if (Del(sChan))
+            PutModule("Removed " + sChan + " from list");
+        else
+            PutModule("Usage: Del [!]<#chan>");
+    }
 
-			for (unsigned int a = 0; a < m_vsChans.size(); a++) {
-				Table.AddRow();
-				Table.SetCell("Chan", m_vsChans[a]);
-			}
+    void OnListCommand(const CString& sLine) {
+        CTable Table;
+        Table.AddColumn("Chan");
 
-			for (unsigned int b = 0; b < m_vsNegChans.size(); b++) {
-				Table.AddRow();
-				Table.SetCell("Chan", "!" + m_vsNegChans[b]);
-			}
+        for (const CString& sChan : m_vsChans) {
+            Table.AddRow();
+            Table.SetCell("Chan", sChan);
+        }
 
-			if (Table.size()) {
-				PutModule(Table);
-			} else {
-				PutModule("You have no entries.");
-			}
-		} else {
-			CTable Table;
-			Table.AddColumn("Command");
-			Table.AddColumn("Description");
+        for (const CString& sChan : m_vsNegChans) {
+            Table.AddRow();
+            Table.SetCell("Chan", "!" + sChan);
+        }
 
-			Table.AddRow();
-			Table.SetCell("Command", "Add");
-			Table.SetCell("Description", "Add an entry, use !#chan to negate and * for wildcards");
+        if (Table.size()) {
+            PutModule(Table);
+        } else {
+            PutModule("You have no entries.");
+        }
+    }
 
-			Table.AddRow();
-			Table.SetCell("Command", "Del");
-			Table.SetCell("Description", "Remove an entry, needs to be an exact match");
+    void OnPart(const CNick& Nick, CChan& Channel,
+                const CString& sMessage) override {
+        AutoCycle(Channel);
+    }
 
-			Table.AddRow();
-			Table.SetCell("Command", "List");
-			Table.SetCell("Description", "List all entries");
+    void OnQuit(const CNick& Nick, const CString& sMessage,
+                const vector<CChan*>& vChans) override {
+        for (CChan* pChan : vChans) AutoCycle(*pChan);
+    }
 
-			if (Table.size()) {
-				PutModule(Table);
-			} else {
-				PutModule("You have no entries.");
-			}
-		}
-	}
+    void OnKick(const CNick& Nick, const CString& sOpNick, CChan& Channel,
+                const CString& sMessage) override {
+        AutoCycle(Channel);
+    }
 
-	virtual void OnPart(const CNick& Nick, CChan& Channel, const CString& sMessage) {
-		AutoCycle(Channel);
-	}
+  protected:
+    void AutoCycle(CChan& Channel) {
+        if (!IsAutoCycle(Channel.GetName())) return;
 
-	virtual void OnQuit(const CNick& Nick, const CString& sMessage, const vector<CChan*>& vChans) {
-		for (unsigned int i = 0; i < vChans.size(); i++)
-			AutoCycle(*vChans[i]);
-	}
+        // Did we recently annoy opers via cycling of an empty channel?
+        if (m_recentlyCycled.HasItem(Channel.GetName())) return;
 
-	virtual void OnKick(const CNick& Nick, const CString& sOpNick, CChan& Channel, const CString& sMessage) {
-		AutoCycle(Channel);
-	}
+        // Is there only one person left in the channel?
+        if (Channel.GetNickCount() != 1) return;
 
-protected:
-	void AutoCycle(CChan& Channel) {
-		if (!IsAutoCycle(Channel.GetName()))
-			return;
+        // Is that person us and we don't have op?
+        const CNick& pNick = Channel.GetNicks().begin()->second;
+        if (!pNick.HasPerm(CChan::Op) &&
+            pNick.NickEquals(GetNetwork()->GetCurNick())) {
+            Channel.Cycle();
+            m_recentlyCycled.AddItem(Channel.GetName());
+        }
+    }
 
-		// Did we recently annoy opers via cycling of an empty channel?
-		if (m_recentlyCycled.HasItem(Channel.GetName()))
-			return;
+    bool AlreadyAdded(const CString& sInput) {
+        CString sChan = sInput;
+        if (sChan.TrimPrefix("!")) {
+            for (const CString& s : m_vsNegChans) {
+                if (s.Equals(sChan)) return true;
+            }
+        } else {
+            for (const CString& s : m_vsChans) {
+                if (s.Equals(sChan)) return true;
+            }
+        }
+        return false;
+    }
 
-		// Is there only one person left in the channel?
-		if (Channel.GetNickCount() != 1)
-			return;
+    bool Add(const CString& sChan) {
+        if (sChan.empty() || sChan == "!") {
+            return false;
+        }
 
-		// Is that person us and we don't have op?
-		const CNick& pNick = Channel.GetNicks().begin()->second;
-		if (!pNick.HasPerm(CChan::Op) && pNick.NickEquals(GetNetwork()->GetCurNick())) {
-			Channel.Cycle();
-			m_recentlyCycled.AddItem(Channel.GetName());
-		}
-	}
+        if (sChan.Left(1) == "!") {
+            m_vsNegChans.push_back(sChan.substr(1));
+        } else {
+            m_vsChans.push_back(sChan);
+        }
 
-	bool AlreadyAdded(const CString& sInput) {
-		vector<CString>::iterator it;
+        // Also save it for next module load
+        SetNV(sChan, "");
 
-		if (sInput.Left(1) == "!") {
-			CString sChan = sInput.substr(1);
-			for (it = m_vsNegChans.begin(); it != m_vsNegChans.end();
-					++it) {
-				if (*it == sChan)
-					return true;
-			}
-		} else {
-			for (it = m_vsChans.begin(); it != m_vsChans.end(); ++it) {
-				if (*it == sInput)
-					return true;
-			}
-		}
-		return false;
-	}
+        return true;
+    }
 
-	bool Add(const CString& sChan) {
-		if (sChan.empty() || sChan == "!") {
-			return false;
-		}
+    bool Del(const CString& sChan) {
+        vector<CString>::iterator it, end;
 
-		if (sChan.Left(1) == "!") {
-			m_vsNegChans.push_back(sChan.substr(1));
-		} else {
-			m_vsChans.push_back(sChan);
-		}
+        if (sChan.empty() || sChan == "!") return false;
 
-		// Also save it for next module load
-		SetNV(sChan, "");
+        if (sChan.Left(1) == "!") {
+            CString sTmp = sChan.substr(1);
+            it = m_vsNegChans.begin();
+            end = m_vsNegChans.end();
 
-		return true;
-	}
+            for (; it != end; ++it)
+                if (*it == sTmp) break;
 
-	bool Del(const CString& sChan) {
-		vector<CString>::iterator it, end;
+            if (it == end) return false;
 
-		if (sChan.empty() || sChan == "!")
-			return false;
+            m_vsNegChans.erase(it);
+        } else {
+            it = m_vsChans.begin();
+            end = m_vsChans.end();
 
-		if (sChan.Left(1) == "!") {
-			CString sTmp = sChan.substr(1);
-			it = m_vsNegChans.begin();
-			end = m_vsNegChans.end();
+            for (; it != end; ++it)
+                if (*it == sChan) break;
 
-			for (; it != end; ++it)
-				if (*it == sTmp)
-					break;
+            if (it == end) return false;
 
-			if (it == end)
-				return false;
+            m_vsChans.erase(it);
+        }
 
-			m_vsNegChans.erase(it);
-		} else {
-			it = m_vsChans.begin();
-			end = m_vsChans.end();
+        DelNV(sChan);
 
-			for (; it != end; ++it)
-				if (*it == sChan)
-					break;
+        return true;
+    }
 
-			if (it == end)
-				return false;
+    bool IsAutoCycle(const CString& sChan) {
+        for (const CString& s : m_vsNegChans) {
+            if (sChan.WildCmp(s, CString::CaseInsensitive)) {
+                return false;
+            }
+        }
 
-			m_vsChans.erase(it);
-		}
+        for (const CString& s : m_vsChans) {
+            if (sChan.WildCmp(s, CString::CaseInsensitive)) {
+                return true;
+            }
+        }
 
-		DelNV(sChan);
+        return false;
+    }
 
-		return true;
-	}
-
-	bool IsAutoCycle(const CString& sChan) {
-		for (unsigned int a = 0; a < m_vsNegChans.size(); a++) {
-			if (sChan.WildCmp(m_vsNegChans[a])) {
-				return false;
-			}
-		}
-
-		for (unsigned int b = 0; b < m_vsChans.size(); b++) {
-			if (sChan.WildCmp(m_vsChans[b])) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-private:
-	vector<CString> m_vsChans;
-	vector<CString> m_vsNegChans;
-	TCacheMap<CString> m_recentlyCycled;
+  private:
+    vector<CString> m_vsChans;
+    vector<CString> m_vsNegChans;
+    TCacheMap<CString> m_recentlyCycled;
 };
 
-template<> void TModInfo<CAutoCycleMod>(CModInfo& Info) {
-	Info.SetWikiPage("autocycle");
-	Info.SetHasArgs(true);
-	Info.SetArgsHelpText("List of channel masks and channel masks with ! before them.");
+template <>
+void TModInfo<CAutoCycleMod>(CModInfo& Info) {
+    Info.SetWikiPage("autocycle");
+    Info.SetHasArgs(true);
+    Info.SetArgsHelpText(
+        "List of channel masks and channel masks with ! before them.");
 }
 
-NETWORKMODULEDEFS(CAutoCycleMod, "Rejoins channels to gain Op if you're the only user left")
+NETWORKMODULEDEFS(CAutoCycleMod,
+                  "Rejoins channels to gain Op if you're the only user left")

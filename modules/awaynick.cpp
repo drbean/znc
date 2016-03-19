@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,19 @@
 #include <znc/Modules.h>
 
 class CAwayNickMod : public CModule {
-public:
-	MODCONSTRUCTOR(CAwayNickMod) {}
+  public:
+    MODCONSTRUCTOR(CAwayNickMod) {}
 
-	virtual bool OnLoad(const CString&, CString& sMessage) {
-		sMessage = "retired module - see http://wiki.znc.in/awaynick";
-		return false;
-	}
+    bool OnLoad(const CString&, CString& sMessage) override {
+        sMessage = "retired module - see http://wiki.znc.in/awaynick";
+        return false;
+    }
 };
 
-template<> void TModInfo<CAwayNickMod>(CModInfo& Info) {
-	Info.SetWikiPage("awaynick");
+template <>
+void TModInfo<CAwayNickMod>(CModInfo& Info) {
+    Info.SetWikiPage("awaynick");
 }
 
-NETWORKMODULEDEFS(CAwayNickMod, "retired module - see http://wiki.znc.in/awaynick")
+NETWORKMODULEDEFS(CAwayNickMod,
+                  "retired module - see http://wiki.znc.in/awaynick")

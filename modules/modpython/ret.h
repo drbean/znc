@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,23 @@
 #pragma once
 
 class CPyRetString {
-public:
-	CString& s;
-	CPyRetString(CString& S) : s(S) {}
-	static PyObject* wrap(CString& S) {
-		CPyRetString* x = new CPyRetString(S);
-		return SWIG_NewInstanceObj(x, SWIG_TypeQuery("CPyRetString*"), SWIG_POINTER_OWN);
-	}
+  public:
+    CString& s;
+    CPyRetString(CString& S) : s(S) {}
+    static PyObject* wrap(CString& S) {
+        CPyRetString* x = new CPyRetString(S);
+        return SWIG_NewInstanceObj(x, SWIG_TypeQuery("CPyRetString*"),
+                                   SWIG_POINTER_OWN);
+    }
 };
 
 class CPyRetBool {
-public:
-	bool& b;
-	CPyRetBool(bool& B) : b(B) {}
-	static PyObject* wrap(bool& B) {
-		CPyRetBool* x = new CPyRetBool(B);
-		return SWIG_NewInstanceObj(x, SWIG_TypeQuery("CPyRetBool*"), SWIG_POINTER_OWN);
-	}
+  public:
+    bool& b;
+    CPyRetBool(bool& B) : b(B) {}
+    static PyObject* wrap(bool& B) {
+        CPyRetBool* x = new CPyRetBool(B);
+        return SWIG_NewInstanceObj(x, SWIG_TypeQuery("CPyRetBool*"),
+                                   SWIG_POINTER_OWN);
+    }
 };

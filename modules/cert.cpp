@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,80 +22,85 @@
 #include <znc/IRCSock.h>
 
 class CCertMod : public CModule {
-public:
-	void Delete(const CString &line) {
-		if (CFile::Delete(PemFile())) {
-			PutModule("Pem file deleted");
-		} else {
-			PutModule("The pem file doesn't exist or there was a error deleting the pem file.");
-		}
-	}
+  public:
+    void Delete(const CString& line) {
+        if (CFile::Delete(PemFile())) {
+            PutModule(t("Pem file deleted"));
+        } else {
+            PutModule(t(
+                "The pem file doesn't exist or there was a error deleting the "
+                "pem file."));
+        }
+    }
 
-	void Info(const CString &line) {
-		if (HasPemFile()) {
-			PutModule("You have a certificate in: " + PemFile());
-		} else {
-			PutModule("You do not have a certificate. Please use the web interface to add a certificate");
-			if (GetUser()->IsAdmin()) {
-				PutModule("Alternatively you can either place one at " + PemFile());
-			}
-		}
-	}
+    void Info(const CString& line) {
+        if (HasPemFile()) {
+            PutModule(f("You have a certificate in {1}")(PemFile()));
+        } else {
+            PutModule(t(
+                "You do not have a certificate. Please use the web interface "
+                "to add a certificate"));
+            if (GetUser()->IsAdmin()) {
+                PutModule(f(
+                             "Alternatively you can either place one at {1}")(
+                    PemFile()));
+            }
+        }
+    }
 
-	MODCONSTRUCTOR(CCertMod) {
-		AddHelpCommand();
-		AddCommand("delete", static_cast<CModCommand::ModCmdFunc>(&CCertMod::Delete),
-			"", "Delete the current certificate");
-		AddCommand("info", static_cast<CModCommand::ModCmdFunc>(&CCertMod::Info));
-	}
+    MODCONSTRUCTOR(CCertMod) {
+        AddHelpCommand();
+        AddCommand("delete", "", d("Delete the current certificate"),
+                   [=](const CString& sLine) { Delete(sLine); });
+        AddCommand("info", "", d("Show the current certificate"),
+                   [=](const CString& sLine) { Info(sLine); });
+    }
 
-	virtual ~CCertMod() {}
+    ~CCertMod() override {}
 
-	CString PemFile() const {
-		return GetSavePath() + "/user.pem";
-	}
+    CString PemFile() const { return GetSavePath() + "/user.pem"; }
 
-	bool HasPemFile() const {
-		return (CFile::Exists(PemFile()));
-	}
+    bool HasPemFile() const { return (CFile::Exists(PemFile())); }
 
-	virtual EModRet OnIRCConnecting(CIRCSock *pIRCSock) {
-		if (HasPemFile()) {
-			pIRCSock->SetPemLocation(PemFile());
-		}
+    EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
+        if (HasPemFile()) {
+            pIRCSock->SetPemLocation(PemFile());
+        }
 
-		return CONTINUE;
-	}
+        return CONTINUE;
+    }
 
-	virtual CString GetWebMenuTitle() { return "Certificate"; }
+    CString GetWebMenuTitle() override { return t("Certificate"); }
 
-	virtual bool OnWebRequest(CWebSock& WebSock, const CString& sPageName, CTemplate& Tmpl) {
-		if (sPageName == "index") {
-			Tmpl["Cert"] = CString(HasPemFile());
-			return true;
-		} else if (sPageName == "update") {
-			CFile fPemFile(PemFile());
+    bool OnWebRequest(CWebSock& WebSock, const CString& sPageName,
+                      CTemplate& Tmpl) override {
+        if (sPageName == "index") {
+            Tmpl["Cert"] = CString(HasPemFile());
+            return true;
+        } else if (sPageName == "update") {
+            CFile fPemFile(PemFile());
 
-			if (fPemFile.Open(O_WRONLY | O_TRUNC | O_CREAT)) {
-				fPemFile.Write(WebSock.GetParam("cert", true, ""));
-				fPemFile.Close();
-			}
+            if (fPemFile.Open(O_WRONLY | O_TRUNC | O_CREAT)) {
+                fPemFile.Write(WebSock.GetParam("cert", true, ""));
+                fPemFile.Close();
+            }
 
-			WebSock.Redirect(GetWebPath());
-			return true;
-		} else if (sPageName == "delete") {
-			CFile::Delete(PemFile());
-			WebSock.Redirect(GetWebPath());
-			return true;
-		}
+            WebSock.Redirect(GetWebPath());
+            return true;
+        } else if (sPageName == "delete") {
+            CFile::Delete(PemFile());
+            WebSock.Redirect(GetWebPath());
+            return true;
+        }
 
-		return false;
-	}
+        return false;
+    }
 };
 
-template<> void TModInfo<CCertMod>(CModInfo& Info) {
-	Info.AddType(CModInfo::UserModule);
-	Info.SetWikiPage("cert");
+template <>
+void TModInfo<CCertMod>(CModInfo& Info) {
+    Info.AddType(CModInfo::UserModule);
+    Info.SetWikiPage("cert");
 }
 
-NETWORKMODULEDEFS(CCertMod, "Use a ssl certificate to connect to a server")
+NETWORKMODULEDEFS(CCertMod, t("Use a ssl certificate to connect to a server"))

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,18 @@
 #include <znc/Modules.h>
 
 class CMissingMotd : public CModule {
-public:
-	MODCONSTRUCTOR(CMissingMotd) {}
+  public:
+    MODCONSTRUCTOR(CMissingMotd) {}
 
-	virtual void OnClientLogin() {
-		PutUser(":irc.znc.in 422 :MOTD File is missing");
-	}
+    void OnClientLogin() override {
+        PutUser(":irc.znc.in 422 :MOTD File is missing");
+    }
 };
 
-template<> void TModInfo<CMissingMotd>(CModInfo& Info)
-{
+template <>
+void TModInfo<CMissingMotd>(CModInfo& Info) {
     Info.SetWikiPage("missingmotd");
     Info.SetHasArgs(false);
 }
 
 USERMODULEDEFS(CMissingMotd, "Sends 422 to clients when they login")
-

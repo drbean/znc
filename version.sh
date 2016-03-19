@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# When changing this file, remember also about nightlies
+# When changing this file, remember also about nightlies (make-tarball.sh)
 
 # Get the path to the source directory
 GIT_DIR=`dirname $0`
@@ -11,6 +11,7 @@ if [ "x$GIT" = "x" ]
 then
 	EXTRA=""
 else
+	GIT_HERE="${GIT}"
 	GIT="${GIT} --git-dir=${GIT_DIR}/.git"
 
 	# Figure out the information we need
@@ -38,13 +39,21 @@ else
 	else
 		EXTRA="-git-${COMMITS_SINCE}-${SHORT_ID}"
 	fi
+
+	if [ 1 = `cd ${GIT_DIR}; ${GIT_HERE} status --ignore-submodules=dirty --porcelain -- third_party/Csocket | wc -l` ]
+	then
+		# Makefile redirects all errors from this script into /dev/null, but this messages actually needs to be shown
+		# So put it to 3, and then Makefile redirects 3 to stderr
+		echo "Warning: Csocket submodule looks outdated. Run: git submodule update --init --recursive" 1>&3
+		EXTRA="${EXTRA}-frankenznc"
+	fi
 fi
 
 # Generate output file, if any
 if [ "x$WRITE_OUTPUT" = "xyes" ]
 then
 	echo '#include <znc/version.h>' > src/version.cpp
-	echo "const char* ZNC_VERSION_EXTRA = \"$EXTRA\";" >> src/version.cpp
+	echo "const char* ZNC_VERSION_EXTRA = VERSION_EXTRA \"$EXTRA\";" >> src/version.cpp
 fi
 
 echo "$EXTRA"

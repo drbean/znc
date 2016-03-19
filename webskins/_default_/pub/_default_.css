@@ -238,27 +238,28 @@ input.full, textarea.full,
 }
 
 input.twothird, textarea.twothird,
-.twothird input, .twothird textarea {
+.twothird > input, .twothird > textarea {
 	width: 450px;
 }
 
 input.half, textarea.half,
-.half input, .half textarea {
+.half > input, .half > textarea {
 	width: 300px;
 }
 
 input.third, textarea.third,
-.third input, .third textarea {
+.third > input, .third > textarea {
 	width: 150px;
 }
 
 input.sixth, textarea.sixth,
-.sixth input, .sixth textarea {
+.sixth > input, .sixth > textarea {
 	width: 75px;
 }
 
-input.number {
-	width: 40px;
+input[type=number] {
+	width: 75px;
+	min-width: 75px;
 }
 
 table {
@@ -307,7 +308,7 @@ tr.evenrow td {
 	padding: 10px 5px 0 0;
 }
 
-.subsection input, .subsection select, .subsection textarea {
+.subsection > input, .subsection select, .subsection textarea {
 	margin: 5px 0 5px 0;
 	min-width: 75px;
 	vertical-align: middle;
@@ -342,6 +343,11 @@ tr.evenrow td {
 	width: 585px;
 }
 
+.full .info {
+	width: 610px;
+	clear: both;
+}
+
 td.mod_descr,
 td.mod_name,
 td.mod_args input {
@@ -356,7 +362,7 @@ td.mod_name,
 .lotsofcheckboxes .checkboxandlabel {
 	display: block;
 	float: left;
-	width: 200px;
+	width: 100%;
 	margin-top: 0.5em;
 }
 

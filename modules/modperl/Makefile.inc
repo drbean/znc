@@ -27,7 +27,7 @@ PERLHOOK     := modperl_install
 CLEAN    += modperl/ZNC.$(PERLCEXT_EXT) modperl/ZNC.o modperl/gen
 ifneq "$(SWIG)" ""
 # Only delete these files if we can regenerate them
-CLEAN    += modperl/ZNC.pm modperl/swigperlrun.h modperl/ZNC.cpp modperl/functions.cpp
+CLEAN    += modperl/ZNC.pm modperl/swigperlrun.h modperl/modperl_biglib.cpp modperl/perlfunctions.cpp
 endif
 
 all: modperl_all
@@ -40,13 +40,13 @@ endif
 
 install: $(PERLHOOK)
 
-modperl_all: modperl/ZNC.$(PERLCEXT_EXT) modperl/swigperlrun.h modperl/functions.cpp
+modperl_all: modperl/ZNC.$(PERLCEXT_EXT) modperl/swigperlrun.h modperl/perlfunctions.cpp
 
 modperl/ZNC.$(PERLCEXT_EXT): modperl/ZNC.o Makefile modperl.so
 	$(E) Linking ZNC Perl bindings library...
-	$(Q)$(CXX) $(MODFLAGS) $(LDFLAGS) $(MODLINK) -o $@ $< $(PERL_LD) $(PERLDEPONMOD)
+	$(Q)$(CXX) $(MODFLAGS) $(LDFLAGS) $(MODLINK) -o $@ $< $(PERL_LD) $(PERLDEPONMOD) $(LIBS)
 
-modperl/ZNC.o: modperl/ZNC.cpp Makefile
+modperl/ZNC.o: modperl/modperl_biglib.cpp Makefile
 	@mkdir -p modperl
 	@mkdir -p .depend
 	$(E) Building ZNC Perl bindings library...
@@ -54,9 +54,15 @@ modperl/ZNC.o: modperl/ZNC.cpp Makefile
 
 ifneq "$(SWIG)" ""
 include $(srcdir)/modperl/Makefile.gen
+else
+modperl/swigperlrun.h modperl/ZNC.pm modperl/perlfunctions.cpp: modperl/modperl_biglib.cpp
+modperl/modperl_biglib.cpp: modperl/generated.tar.gz
+	@mkdir -p modperl
+	$(E) Unpacking ZNC Perl bindings...
+	$(Q)tar -xf $^ -C modperl
 endif
 
-modperl.o: modperl/functions.cpp modperl/swigperlrun.h
+modperl.o: modperl/perlfunctions.cpp modperl/swigperlrun.h
 
 modperl_install: install_datadir modperl_all
 	for i in $(wildcard $(srcdir)/*.pm); do \

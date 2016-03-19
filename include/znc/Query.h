@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _QUERY_H
-#define _QUERY_H
+#ifndef ZNC_QUERY_H
+#define ZNC_QUERY_H
 
 #include <znc/zncconfig.h>
 #include <znc/ZNCString.h>
@@ -27,28 +27,41 @@ class CIRCNetwork;
 // !Forward Declarations
 
 class CQuery {
-public:
-	CQuery(const CString& sName, CIRCNetwork* pNetwork);
-	~CQuery();
+  public:
+    CQuery(const CString& sName, CIRCNetwork* pNetwork);
+    ~CQuery();
 
-	// Buffer
-	const CBuffer& GetBuffer() const { return m_Buffer; }
-	unsigned int GetBufferCount() const { return m_Buffer.GetLineCount(); }
-	bool SetBufferCount(unsigned int u, bool bForce = false) { return m_Buffer.SetLineCount(u, bForce); }
-	size_t AddBuffer(const CString& sFormat, const CString& sText = "", const timeval* ts = NULL) { return m_Buffer.AddLine(sFormat, sText, ts); }
-	void ClearBuffer() { m_Buffer.Clear(); }
-	void SendBuffer(CClient* pClient);
-	void SendBuffer(CClient* pClient, const CBuffer& Buffer);
-	// !Buffer
+    CQuery(const CQuery&) = delete;
+    CQuery& operator=(const CQuery&) = delete;
 
-	// Getters
-	const CString& GetName() const { return m_sName; }
-	// !Getters
+    // Buffer
+    const CBuffer& GetBuffer() const { return m_Buffer; }
+    unsigned int GetBufferCount() const { return m_Buffer.GetLineCount(); }
+    bool SetBufferCount(unsigned int u, bool bForce = false) {
+        return m_Buffer.SetLineCount(u, bForce);
+    }
+    size_t AddBuffer(const CMessage& Format, const CString& sText = "") {
+        return m_Buffer.AddLine(Format, sText);
+    }
+    /// @deprecated
+    size_t AddBuffer(const CString& sFormat, const CString& sText = "",
+                     const timeval* ts = nullptr,
+                     const MCString& mssTags = MCString::EmptyMap) {
+        return m_Buffer.AddLine(sFormat, sText, ts, mssTags);
+    }
+    void ClearBuffer() { m_Buffer.Clear(); }
+    void SendBuffer(CClient* pClient);
+    void SendBuffer(CClient* pClient, const CBuffer& Buffer);
+    // !Buffer
 
-private:
-	CString                      m_sName;
-	CIRCNetwork*                 m_pNetwork;
-	CBuffer                      m_Buffer;
+    // Getters
+    const CString& GetName() const { return m_sName; }
+    // !Getters
+
+  private:
+    CString m_sName;
+    CIRCNetwork* m_pNetwork;
+    CBuffer m_Buffer;
 };
 
-#endif // !_QUERY_H
+#endif  // !ZNC_QUERY_H

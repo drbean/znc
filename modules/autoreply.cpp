@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  * Copyright (C) 2008 Michael "Svedrin" Ziegler diese-addy@funzt-halt.net
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,83 +19,81 @@
 #include <znc/IRCSock.h>
 
 class CAutoReplyMod : public CModule {
-public:
-	MODCONSTRUCTOR(CAutoReplyMod) {
-		m_Messaged.SetTTL(1000 * 120);
-	}
+  public:
+    MODCONSTRUCTOR(CAutoReplyMod) {
+        AddHelpCommand();
+        AddCommand("Set", static_cast<CModCommand::ModCmdFunc>(
+                              &CAutoReplyMod::OnSetCommand),
+                   "<reply>", "Sets a new reply");
+        AddCommand("Show", static_cast<CModCommand::ModCmdFunc>(
+                               &CAutoReplyMod::OnShowCommand),
+                   "", "Displays the current query reply");
+        m_Messaged.SetTTL(1000 * 120);
+    }
 
-	virtual ~CAutoReplyMod() {}
+    ~CAutoReplyMod() override {}
 
-	virtual bool OnLoad(const CString& sArgs, CString& sMessage) {
-		if (!sArgs.empty()) {
-			SetReply(sArgs);
-		}
+    bool OnLoad(const CString& sArgs, CString& sMessage) override {
+        if (!sArgs.empty()) {
+            SetReply(sArgs);
+        }
 
-		return true;
-	}
+        return true;
+    }
 
-	void SetReply(const CString& sReply) {
-		SetNV("Reply", sReply);
-	}
+    void SetReply(const CString& sReply) { SetNV("Reply", sReply); }
 
-	CString GetReply() {
-		CString sReply = GetNV("Reply");
-		if (sReply.empty()) {
-			sReply = "%nick% is currently away, try again later";
-			SetReply(sReply);
-		}
+    CString GetReply() {
+        CString sReply = GetNV("Reply");
+        if (sReply.empty()) {
+            sReply = "%nick% is currently away, try again later";
+            SetReply(sReply);
+        }
 
-		return ExpandString(sReply);
-	}
+        return ExpandString(sReply);
+    }
 
-	void Handle(const CString& sNick) {
-		CIRCSock *pIRCSock = GetNetwork()->GetIRCSock();
-		if (!pIRCSock)
-			// WTF?
-			return;
-		if (sNick == pIRCSock->GetNick())
-			return;
-		if (m_Messaged.HasItem(sNick))
-			return;
+    void Handle(const CString& sNick) {
+        CIRCSock* pIRCSock = GetNetwork()->GetIRCSock();
+        if (!pIRCSock)
+            // WTF?
+            return;
+        if (sNick == pIRCSock->GetNick()) return;
+        if (m_Messaged.HasItem(sNick)) return;
 
-		if (GetNetwork()->IsUserAttached())
-			return;
+        if (GetNetwork()->IsUserAttached()) return;
 
-		m_Messaged.AddItem(sNick);
-		PutIRC("NOTICE " + sNick + " :" + GetReply());
-	}
+        m_Messaged.AddItem(sNick);
+        PutIRC("NOTICE " + sNick + " :" + GetReply());
+    }
 
-	virtual EModRet OnPrivMsg(CNick& Nick, CString& sMessage) {
-		Handle(Nick.GetNick());
-		return CONTINUE;
-	}
+    EModRet OnPrivMsg(CNick& Nick, CString& sMessage) override {
+        Handle(Nick.GetNick());
+        return CONTINUE;
+    }
 
-	virtual void OnModCommand(const CString& sCommand) {
-		const CString& sCmd = sCommand.Token(0);
+    void OnShowCommand(const CString& sCommand) {
+        PutModule("Current reply is: " + GetNV("Reply") + " (" + GetReply() +
+                  ")");
+    }
 
-		if (sCmd.Equals("SHOW")) {
-			PutModule("Current reply is: " + GetNV("Reply")
-					+ " (" + GetReply() + ")");
-		} else if (sCmd.Equals("SET")) {
-			SetReply(sCommand.Token(1, true));
-			PutModule("New reply set");
-		} else {
-			PutModule("Available commands are:");
-			PutModule("Show        - Displays the current query reply");
-			PutModule("Set <reply> - Sets a new reply");
-		}
-	}
+    void OnSetCommand(const CString& sCommand) {
+        SetReply(sCommand.Token(1, true));
+        PutModule("New reply set");
+    }
 
-private:
-	TCacheMap<CString> m_Messaged;
+  private:
+    TCacheMap<CString> m_Messaged;
 };
 
-template<> void TModInfo<CAutoReplyMod>(CModInfo& Info) {
-	Info.SetWikiPage("autoreply");
-	Info.AddType(CModInfo::NetworkModule);
-	Info.SetHasArgs(true);
-	Info.SetArgsHelpText("You might specify a reply text. It is used when automatically answering queries, if you are not connected to ZNC.");
+template <>
+void TModInfo<CAutoReplyMod>(CModInfo& Info) {
+    Info.SetWikiPage("autoreply");
+    Info.AddType(CModInfo::NetworkModule);
+    Info.SetHasArgs(true);
+    Info.SetArgsHelpText(
+        "You might specify a reply text. It is used when automatically "
+        "answering queries, if you are not connected to ZNC.");
 }
 
 USERMODULEDEFS(CAutoReplyMod, "Reply to queries when you are away")
-

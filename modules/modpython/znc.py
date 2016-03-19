@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+# Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+from functools import wraps
 import imp
 import re
 import traceback
@@ -167,6 +168,26 @@ class Module:
 
     def __str__(self):
         return self.GetModName()
+
+    @classmethod
+    def t(cls, english, context=''):
+        domain = 'znc-' + cls.__name__
+        return CTranslation.Get().Singular(domain, context, english)
+
+    @classmethod
+    def f(cls, english, context=''):
+        fmt = cls.t(english, context)
+        # Returning bound method
+        return fmt.format
+
+    @classmethod
+    def p(cls, english, englishes, num, context=''):
+        domain = 'znc-' + cls.__name__
+        fmt = CTranslation.Get().Plural(domain, context, english, englishes,
+                                        num)
+        return fmt.format
+
+    # TODO is "d" needed for python? Maybe after AddCommand is implemented
 
     def OnLoad(self, sArgs, sMessage):
         return True
@@ -338,6 +359,9 @@ class Module:
     def OnUserTopicRequest(self, sChannel):
         pass
 
+    def OnUserQuit(self, sMessage):
+        pass
+
     def OnCTCPReply(self, Nick, sMessage):
         pass
 
@@ -454,6 +478,180 @@ class Module:
     def OnRawMode2(self, OpNick, Channel, sModes, sArgs):
         return self.OnRawMode(OpNick, Channel, sModes, sArgs)
 
+    def OnRawMessage(self, msg):
+        pass
+
+    def OnNumericMessage(self, msg):
+        pass
+
+    # Deprecated non-Message functions should still work, for now.
+    def OnQuitMessage(self, msg, vChans):
+        return self.OnQuit(msg.GetNick(), msg.GetReason(), vChans)
+
+    def OnNickMessage(self, msg, vChans):
+        return self.OnNick(msg.GetNick(), msg.GetNewNick(), vChans)
+
+    def OnKickMessage(self, msg):
+        return self.OnKick(msg.GetNick(), msg.GetKickedNick(), msg.GetChan(), msg.GetReason())
+
+    def OnJoinMessage(self, msg):
+        return self.OnJoin(msg.GetNick(), msg.GetChan())
+
+    def OnPartMessage(self, msg):
+        return self.OnPart(msg.GetNick(), msg.GetChan(), msg.GetReason())
+
+    def OnChanBufferPlayMessage(self, msg):
+        modified = String()
+        old = modified.s = msg.ToString(CMessage.ExcludeTags)
+        ret = self.OnChanBufferPlayLine(msg.GetChan(), msg.GetClient(), modified)
+        if old != modified.s:
+            msg.Parse(modified.s)
+        return ret
+
+    def OnPrivBufferPlayMessage(self, msg):
+        modified = String()
+        old = modified.s = msg.ToString(CMessage.ExcludeTags)
+        ret = self.OnPrivBufferPlayLine(msg.GetClient(), modified)
+        if old != modified.s:
+            msg.Parse(modified.s)
+        return ret
+
+    def OnUserRawMessage(self, msg):
+        pass
+
+    def OnUserCTCPReplyMessage(self, msg):
+        target = String(msg.GetTarget())
+        text = String(msg.GetText())
+        ret = self.OnUserCTCPReply(target, text)
+        msg.SetTarget(target.s)
+        msg.SetText(text.s)
+        return ret
+
+    def OnUserCTCPMessage(self, msg):
+        target = String(msg.GetTarget())
+        text = String(msg.GetText())
+        ret = self.OnUserCTCP(target, text)
+        msg.SetTarget(target.s)
+        msg.SetText(text.s)
+        return ret
+
+    def OnUserActionMessage(self, msg):
+        target = String(msg.GetTarget())
+        text = String(msg.GetText())
+        ret = self.OnUserAction(target, text)
+        msg.SetTarget(target.s)
+        msg.SetText(text.s)
+        return ret
+
+    def OnUserTextMessage(self, msg):
+        target = String(msg.GetTarget())
+        text = String(msg.GetText())
+        ret = self.OnUserMsg(target, text)
+        msg.SetTarget(target.s)
+        msg.SetText(text.s)
+        return ret
+
+    def OnUserNoticeMessage(self, msg):
+        target = String(msg.GetTarget())
+        text = String(msg.GetText())
+        ret = self.OnUserNotice(target, text)
+        msg.SetTarget(target.s)
+        msg.SetText(text.s)
+        return ret
+
+    def OnUserJoinMessage(self, msg):
+        chan = String(msg.GetTarget())
+        key = String(msg.GetKey())
+        ret = self.OnUserJoin(chan, key)
+        msg.SetTarget(chan.s)
+        msg.SetKey(key.s)
+        return ret
+
+    def OnUserPartMessage(self, msg):
+        chan = String(msg.GetTarget())
+        reason = String(msg.GetReason())
+        ret = self.OnUserPart(chan, reason)
+        msg.SetTarget(chan.s)
+        msg.SetReason(reason.s)
+        return ret
+
+    def OnUserTopicMessage(self, msg):
+        chan = String(msg.GetTarget())
+        topic = String(msg.GetTopic())
+        ret = self.OnUserTopic(chan, topic)
+        msg.SetTarget(chan.s)
+        msg.SetTopic(topic.s)
+        return ret
+
+    def OnUserQuitMessage(self, msg):
+        reason = String(msg.GetReason())
+        ret = self.OnUserQuit(reason)
+        msg.SetReason(reason.s)
+        return ret
+
+    def OnCTCPReplyMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnCTCPReply(msg.GetNick(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnPrivCTCPMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnPrivCTCP(msg.GetNick(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnChanCTCPMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnChanCTCP(msg.GetNick(), msg.GetChan(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnPrivActionMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnPrivAction(msg.GetNick(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnChanActionMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnChanAction(msg.GetNick(), msg.GetChan(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnPrivMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnPrivMsg(msg.GetNick(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnChanMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnChanMsg(msg.GetNick(), msg.GetChan(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnPrivNoticeMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnPrivNotice(msg.GetNick(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnChanNoticeMessage(self, msg):
+        text = String(msg.GetText())
+        ret = self.OnChanNotice(msg.GetNick(), msg.GetChan(), text)
+        msg.SetText(text.s)
+        return ret
+
+    def OnTopicMessage(self, msg):
+        topic = String(msg.GetTopic())
+        ret = self.OnTopic(msg.GetNick(), msg.GetChan(), topic)
+        msg.SetTopic(topic.s)
+        return ret
+
+    def OnUnknownUserRawMessage(self, msg):
+        pass
+
 
 def make_inherit(cl, parent, attr):
     def make_caller(parent, name, attr):
@@ -534,12 +732,11 @@ def load_module(modname, args, module_type, user, network, retmsg, modpython):
         return 1
 
     module = cl()
-    module._cmod = CreatePyModule(user, network, modname, datapath, module, modpython)
+    module._cmod = CreatePyModule(user, network, modname, datapath, module_type, module, modpython)
     module.nv = ModuleNV(module._cmod)
     module.SetDescription(cl.description)
     module.SetArgs(args)
     module.SetModPath(pymodule.__file__)
-    module.SetType(module_type)
     _py_modules.add(module)
 
     if module_type == CModInfo.UserModule:
@@ -627,9 +824,12 @@ def unload_all():
 
 
 def gather_mod_info(cl, modinfo):
+    translation = CTranslationDomainRefHolder("znc-" + modinfo.GetName())
     modinfo.SetDescription(cl.description)
     modinfo.SetWikiPage(cl.wiki_page)
     modinfo.SetDefaultType(cl.module_types[0])
+    modinfo.SetArgsHelpText(cl.args_help_text);
+    modinfo.SetHasArgs(cl.has_args);
     for module_type in cl.module_types:
         modinfo.AddType(module_type)
 
@@ -704,6 +904,36 @@ def CreateWebSubPage(name, title='', params=dict(), admin=False):
 CUser.GetNetworks = CUser.GetNetworks_
 CIRCNetwork.GetChans = CIRCNetwork.GetChans_
 CChan.GetNicks = CChan.GetNicks_
+CZNC.GetUserMap = CZNC.GetUserMap_
+
+
+def FreeOwnership(func):
+    """
+        Force release of python ownership of user object when adding it to znc
+
+        This solves #462
+    """
+    @wraps(func)
+    def _wrap(self, obj, *args):
+        # Bypass if first argument is not an SWIG object (like base type str)
+        if not hasattr(obj, 'thisown'):
+            return func(self, obj, *args)
+        # Change ownership of C++ object from SWIG/python to ZNC core if function was successful
+        if func(self, obj, *args):
+            # .thisown is magic SWIG's attribute which makes it call C++ "delete" when python's garbage collector deletes python wrapper
+            obj.thisown = 0
+            return True
+        else:
+            return False
+    return _wrap
+
+CZNC.AddListener = FreeOwnership(func=CZNC.AddListener)
+CZNC.AddUser = FreeOwnership(func=CZNC.AddUser)
+CZNC.AddNetworkToQueue = FreeOwnership(func=CZNC.AddNetworkToQueue)
+CUser.AddNetwork = FreeOwnership(func=CUser.AddNetwork)
+CIRCNetwork.AddChan = FreeOwnership(func=CIRCNetwork.AddChan)
+CModule.AddSocket = FreeOwnership(func=CModule.AddSocket)
+CModule.AddSubPage = FreeOwnership(func=CModule.AddSubPage)
 
 
 class ModulesIter(collections.Iterator):
@@ -718,6 +948,12 @@ class ModulesIter(collections.Iterator):
         self._cmod.plusplus()
         return module
 CModules.__iter__ = lambda cmod: ModulesIter(CModulesIter(cmod))
+
+
+# e.g. msg.As(znc.CNumericMessage)
+def _CMessage_As(self, cl):
+    return getattr(self, 'As_' + cl.__name__, lambda: self)()
+CMessage.As = _CMessage_As
 
 
 def str_eq(self, other):

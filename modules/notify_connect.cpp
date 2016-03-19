@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2016 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,35 @@
 #include <znc/User.h>
 
 class CNotifyConnectMod : public CModule {
-public:
-	MODCONSTRUCTOR(CNotifyConnectMod) {}
+  public:
+    MODCONSTRUCTOR(CNotifyConnectMod) {}
 
-	virtual void OnClientLogin() {
-		SendAdmins(GetUser()->GetUserName() + " attached (from " + GetClient()->GetRemoteIP() + ")");
-	}
+    void OnClientLogin() override { NotifyAdmins("attached"); }
 
-	virtual void OnClientDisconnect() {
-		SendAdmins(GetUser()->GetUserName() + " detached (from " + GetClient()->GetRemoteIP() + ")");
-	}
+    void OnClientDisconnect() override { NotifyAdmins("detached"); }
 
-private:
-	void SendAdmins(const CString &msg) {
-		CZNC::Get().Broadcast(msg, true, NULL, GetClient());
-	}
+  private:
+    void SendAdmins(const CString& msg) {
+        CZNC::Get().Broadcast(msg, true, nullptr, GetClient());
+    }
+
+    void NotifyAdmins(const CString& event) {
+        CString client = GetUser()->GetUserName();
+        if (GetClient()->GetIdentifier() != "") {
+            client += "@";
+            client += GetClient()->GetIdentifier();
+        }
+        CString ip = GetClient()->GetRemoteIP();
+
+        SendAdmins(client + " " + event + " (from " + ip + ")");
+    }
 };
 
-template<> void TModInfo<CNotifyConnectMod>(CModInfo& Info) {
-	Info.SetWikiPage("notify_connect");
+template <>
+void TModInfo<CNotifyConnectMod>(CModInfo& Info) {
+    Info.SetWikiPage("notify_connect");
 }
 
-GLOBALMODULEDEFS(CNotifyConnectMod, "Notifies all admin users when a client connects or disconnects.")
+GLOBALMODULEDEFS(
+    CNotifyConnectMod,
+    "Notifies all admin users when a client connects or disconnects.")
